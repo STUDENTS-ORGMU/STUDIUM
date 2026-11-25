@@ -124,11 +124,24 @@ service cloud.firestore {
         allow get, list: if isMember(groupId);
         allow create: if isLeader(groupId)
           && request.resource.data.keys().hasOnly([
-            'subject', 'title', 'description', 'lessonDate', 'dueDate',
-            'createdBy', 'createdAt', 'updatedAt', 'sourceSuggestionId'
+            'subject', 'title', 'description', 'lessonDate', 'lessonId',
+            'weekday', 'weekNumber', 'lessonTime', 'createdBy', 'createdAt',
+            'updatedAt', 'sourceSuggestionId'
           ])
           && request.resource.data.createdBy == request.auth.uid
           && validTitle(request.resource.data.title)
+          && request.resource.data.lessonDate is string
+          && request.resource.data.lessonId is string
+          && request.resource.data.weekday is int
+          && request.resource.data.weekday >= 1
+          && request.resource.data.weekday <= 6
+          && request.resource.data.weekNumber in [1, 2]
+          && request.resource.data.lessonTime is string
+          && exists(/databases/$(database)/documents/groups/$(groupId)/lessons/$(request.resource.data.lessonId))
+          && get(/databases/$(database)/documents/groups/$(groupId)/lessons/$(request.resource.data.lessonId)).data.subject == request.resource.data.subject
+          && get(/databases/$(database)/documents/groups/$(groupId)/lessons/$(request.resource.data.lessonId)).data.weekday == request.resource.data.weekday
+          && get(/databases/$(database)/documents/groups/$(groupId)/lessons/$(request.resource.data.lessonId)).data.weekNumber == request.resource.data.weekNumber
+          && get(/databases/$(database)/documents/groups/$(groupId)/lessons/$(request.resource.data.lessonId)).data.startsAt == request.resource.data.lessonTime
           && (
             request.resource.data.sourceSuggestionId == null
             ||
@@ -147,12 +160,24 @@ service cloud.firestore {
           && (resource.data.submittedBy == request.auth.uid || isLeader(groupId));
         allow create: if isMember(groupId)
           && request.resource.data.keys().hasOnly([
-            'submittedBy', 'subject', 'title', 'description',
-            'lessonDate', 'dueDate', 'status', 'createdAt'
+            'submittedBy', 'subject', 'title', 'description', 'lessonDate',
+            'lessonId', 'weekday', 'weekNumber', 'lessonTime', 'status', 'createdAt'
           ])
           && request.resource.data.submittedBy == request.auth.uid
           && request.resource.data.status == 'pending'
-          && validTitle(request.resource.data.title);
+          && validTitle(request.resource.data.title)
+          && request.resource.data.lessonDate is string
+          && request.resource.data.lessonId is string
+          && request.resource.data.weekday is int
+          && request.resource.data.weekday >= 1
+          && request.resource.data.weekday <= 6
+          && request.resource.data.weekNumber in [1, 2]
+          && request.resource.data.lessonTime is string
+          && exists(/databases/$(database)/documents/groups/$(groupId)/lessons/$(request.resource.data.lessonId))
+          && get(/databases/$(database)/documents/groups/$(groupId)/lessons/$(request.resource.data.lessonId)).data.subject == request.resource.data.subject
+          && get(/databases/$(database)/documents/groups/$(groupId)/lessons/$(request.resource.data.lessonId)).data.weekday == request.resource.data.weekday
+          && get(/databases/$(database)/documents/groups/$(groupId)/lessons/$(request.resource.data.lessonId)).data.weekNumber == request.resource.data.weekNumber
+          && get(/databases/$(database)/documents/groups/$(groupId)/lessons/$(request.resource.data.lessonId)).data.startsAt == request.resource.data.lessonTime;
         allow update: if isLeader(groupId)
           && resource.data.status == 'pending'
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
