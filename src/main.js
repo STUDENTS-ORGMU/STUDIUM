@@ -884,6 +884,98 @@ async function excuseMissedStudents(lessonId, onlyStudentId = null) {
   }
 }
 
+function bindEvents() {
+  root.addEventListener('click', async event => {
+    const button = event.target.closest('button,[data-schedule-lesson]');
+    if (!button) return;
+    if (button.dataset.mode) return renderAuth(button.dataset.mode);
+    if (button.dataset.tab) { state.tab = button.dataset.tab; return renderWorkspace(); }
+    if (button.dataset.action === 'logout') return doSignOut();
+    if (button.dataset.action === 'menu') { document.querySelector('.sidebar')?.classList.toggle('open'); return; }
+
+    if (button.dataset.scheduleLesson !== undefined) {
+      state.selectedScheduleLessonId = button.dataset.id;
+      renderWorkspace();
+      root.querySelector('#homework-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    if (button.dataset.action === 'show-all-homework') {
+      state.selectedScheduleLessonId = null;
+      renderWorkspace();
+      root.querySelector('#homework-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+
+    if (button.dataset.attendanceLesson) {
+      state.selectedAttendanceLessonId = button.dataset.attendanceLesson;
+      renderWorkspace();
+      root.querySelector('.attendance-register')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      return;
+    }
+    if (button.dataset.attendanceAll) return saveAttendanceForAll(button.dataset.attendanceAll);
+    if (button.dataset.officialStatus) {
+      const current = state.attendanceRecords.find(item =>
+        item.studentId === button.dataset.student &&
+        item.lessonId === button.dataset.lesson &&
+        item.lessonDate === state.attendanceDate
+      );
+      const status = current?.status === button.dataset.officialStatus ? '' : button.dataset.officialStatus;
+      return saveOfficialAttendance(button.dataset.student, button.dataset.lesson, status);
+    }
+    if (button.dataset.action === 'excuse-all-missed') return excuseMissedStudents(button.dataset.lesson);
+    if (button.dataset.attendance) return saveAttendance(button.dataset.lesson, button.dataset.attendance);
+
+    if (button.dataset.action === 'open-lesson-cell') {
+      state.scheduleEditorSlot = {
+        weekNumber: Number(button.dataset.week),
+        weekday: Number(button.dataset.day),
+        periodIndex: Number(button.dataset.period)
+      };
+      renderWorkspace();
+      root.querySelector('#lesson-form input[name="subject"]')?.focus();
+      return;
+    }
+    if (button.dataset.action === 'cancel-lesson-cell') {
+      state.scheduleEditorSlot = null;
+      renderWorkspace();
+      return;
+    }
+    if (button.dataset.action === 'delete-lesson') return deleteLesson(button.dataset.id);
+    if (button.dataset.action === 'copy-code') {
+      try { await navigator.clipboard.writeText(state.activeMembership.inviteCode); notify('Код скопирован.', 'success'); }
+      catch { notify('Код приглашения: ' + state.activeMembership.inviteCode); }
+      return;
+    }
+    if (button.dataset.review) return reviewSuggestion(button.dataset.id, button.dataset.review === 'approve');
+  });
+
+  root.addEventListener('submit', async event => {
+    const form = event.target;
+    if (!form.matches('form')) return;
+    event.preventDefault();
+    if (form.id === 'auth-form') return submitAuth(form);
+    if (form.id === 'create-group') return createGroup(form);
+    if (form.id === 'join-group') return joinGroup(form);
+    if (form.id === 'task-form') return submitTask(form);
+    if (form.id === 'lesson-form') return submitLesson(form);
+    if (form.id === 'cycle-form') return saveCycle(form);
+  });
+
+  root.addEventListener('change', async event => {
+    if (event.target.matches('[data-progress]')) return updateProgress(event.target);
+    if (event.target.id === 'attendance-date' && event.target.value) {
+      state.attendanceDate = event.target.value;
+      state.selectedAttendanceLessonId = null;
+      try { await loadWorkspace(); renderWorkspace(); }
+      catch (error) { notify(error.message, 'error'); }
+    }
+    if (event.target.id === 'group-switch') {
+      try { await selectGroup(event.target.value); }
+      catch (error) { notify(error.message, 'error'); }
+    }
+  });
+}
+
 async function saveCycle(form) {
   const value = new FormData(form).get('studyCycleStart');
   if (!value) return;
