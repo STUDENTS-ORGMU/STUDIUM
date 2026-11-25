@@ -36,7 +36,6 @@ STUDIUM — отдельная платформа для учебных груп
     VITE_FIREBASE_API_KEY=YOUR_FIREBASE_WEB_API_KEY
     VITE_FIREBASE_AUTH_DOMAIN=YOUR_PROJECT_ID.firebaseapp.com
     VITE_FIREBASE_PROJECT_ID=YOUR_PROJECT_ID
-    VITE_FIREBASE_STORAGE_BUCKET=YOUR_PROJECT_ID.firebasestorage.app
     VITE_FIREBASE_MESSAGING_SENDER_ID=YOUR_MESSAGING_SENDER_ID
     VITE_FIREBASE_APP_ID=YOUR_FIREBASE_APP_ID
 
@@ -54,7 +53,7 @@ STUDIUM — отдельная платформа для учебных груп
 4. Открой Firestore Database и создай базу в Production mode.
 5. Опубликуй правила из firestore.rules через вкладку Firestore → Rules или командой firebase deploy --only firestore:rules.
 6. Опубликуй индексы из firestore.indexes.json командой firebase deploy --only firestore:indexes.
-7. Настрой Authentication → Settings → Authorized domains: добавь домен GitHub Pages и localhost для разработки.
+6. Настрой Authentication → Settings → Authorized domains: добавь домен GitHub Pages и localhost для разработки.
 
 В корне есть firebase.json, поэтому Firebase CLI использует подготовленные файлы правил и индексов. Для CLI сначала выполни firebase login и firebase use --add, выбрав свой новый Firebase project.
 
@@ -67,7 +66,6 @@ Workflow в .github/workflows/deploy.yml собирает приложение �
 | VITE_FIREBASE_API_KEY | Web API key |
 | VITE_FIREBASE_AUTH_DOMAIN | PROJECT_ID.firebaseapp.com |
 | VITE_FIREBASE_PROJECT_ID | ID проекта |
-| VITE_FIREBASE_STORAGE_BUCKET | Bucket из Firebase config |
 | VITE_FIREBASE_MESSAGING_SENDER_ID | Messaging sender ID |
 | VITE_FIREBASE_APP_ID | App ID |
 
@@ -135,15 +133,8 @@ Firebase Web config предназначен для идентификации W
 Посещаемость: ответ студента автоматически создаёт начальную официальную отметку («Буду» → «Был», «Не буду» → «Неуваж.»). Ручные изменения старосты сохраняются и не перезаписываются последующими ответами студента.
 
 
-## Материалы группы и Firebase Storage
+## Материалы группы на бесплатном Firebase Spark
 
-В разделе «Материалы» староста может загружать файлы (PDF, DOC/DOCX, PPT/PPTX, XLS/XLSX, TXT, RTF, JPG/PNG/WEBP, ZIP до 20 МБ) и добавлять внешние HTTP(S)-ссылки. Участники группы могут открывать опубликованные материалы. Удалять записи может только староста.
+Раздел «Материалы» хранит метаданные, ссылки и содержимое файлов непосредственно в Cloud Firestore. Файлы разбиваются на небольшие Base64-части в подколлекции `groups/{groupId}/materialFiles/{materialId}/chunks`; Firebase Storage и тариф Blaze не требуются. Максимальный размер одного файла в интерфейсе — 20 МБ; староста может загружать и удалять файлы, участники группы — читать и скачивать.
 
-Для включения загрузок:
-
-1. В Firebase Console открой Build → Storage и создай Storage bucket.
-2. Проверь, что VITE_FIREBASE_STORAGE_BUCKET в GitHub Actions Variables и локальном .env совпадает с bucket из Firebase config.
-3. Опубликуй правила Firestore и Storage: `firebase deploy --only firestore:rules,storage`.
-4. Убедись, что проект привязан командой `firebase use --add`.
-
-Storage Security Rules разрешают чтение только участникам соответствующей группы, а загрузку и удаление — только старосте этой группы. Файлы ограничены 20 МБ и разрешённым набором MIME-типов. Firestore хранит метаданные и путь объекта; сами файлы находятся в Storage.
+Для этой схемы опубликуй обновлённые правила Firestore: `firebase deploy --only firestore:rules`. Storage bucket создавать не нужно. Учти квоты Spark: 1 GiB данных, 50 000 чтений и 20 000 записей/удалений в сутки, 10 GiB исходящего трафика в месяц. Один документ Firestore ограничен 1 MiB, поэтому код разбивает файлы на части около 360 KiB. Это компромисс для небольших учебных материалов, а не замена специализированному файловому хранилищу.
