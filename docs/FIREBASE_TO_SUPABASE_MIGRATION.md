@@ -1,35 +1,23 @@
-# Firebase → Supabase migration
+# Supabase backend
 
-## Current safety status
-Supabase SDK and the initial database schema are installed. The app remains on Firebase. **The live app still uses Firebase Auth and Firestore.** Do not remove Firebase settings or delete Firebase data before a verified import and a separate cutover release.
+STUDIUM uses Supabase as its only backend. Firebase/Firestore is no longer part of the application. No Firebase data is migrated.
 
-## Configure the project
-Copy the Project URL and publishable key from Supabase Dashboard → Project Settings → API (or Connect) into local `.env`:
-```dotenv
-VITE_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
-VITE_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
-```
-The publishable key is suitable for browser code only with correct RLS. Never expose a Supabase secret/service_role key in Vite, GitHub Pages variables, or source control.
+## One-time project setup
 
-## Apply SQL
-The migration `202611260001_initial_schema` has been applied to the connected project. It creates profiles, groups, memberships, invite codes, a JSONB compatibility table, RLS and a private Storage bucket. A follow-up migration adds `join_group_with_invite(code, display_name)` so clients cannot self-join arbitrary group IDs. It creates profiles, groups, memberships, invite codes, a JSONB compatibility table, RLS and a private Storage bucket.
+1. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in local `.env` and GitHub Actions Variables.
+2. Disable email confirmation in Supabase Auth because users register and sign in with a generated `<username>@studium.invalid` alias.
+3. Apply the SQL migrations in `supabase/migrations` in numerical order.
+4. Confirm the private `group-materials` bucket exists and its RLS policies are installed.
 
-## Data and accounts
-1. Export Firestore with Firebase Admin SDK in a trusted local environment. Never commit exports; they contain personal data.
-2. Build a manifest with full document path, document ID, collection, parent group ID, raw fields and timestamps.
-3. Create/import Supabase Auth accounts through a trusted server-side Admin API process. Firebase passwords are not directly migratable through the normal client SDK; plan password reset/re-enrolment. Never copy plaintext passwords.
-4. Create a Firebase UID → Supabase Auth UUID mapping. Preserve old IDs in `legacy_firebase_uid` and references in JSONB until reconciled.
-5. Import profiles, groups, memberships, invite codes and all group subcollections, preserving Firestore document IDs.
-6. Move file bytes from Firestore chunk documents into private Storage paths `<group-id>/<material-id>/<filename>`; verify sizes and hashes.
-7. Compare counts per collection and sample profiles, memberships, schedule, tasks, task progress, attendance, links and file downloads.
+## Database layout
 
-No production importer or automatic backend switch is enabled yet: the actual export format and UID mapping must be validated before a repeatable importer is safe.
+- `profiles`: account profile and unique username.
+- `study_groups`: group metadata.
+- `group_members`: group membership and roles.
+- `invite_codes`: invitation codes, exposed to clients only through the exact-code lookup/join RPC.
+- `group_records`: JSONB records for tasks, schedule, progress, attendance and materials.
+- Storage bucket `group-materials`: private group files, addressed by `<group-id>/<material-id>/<filename>`.
 
-## Cutover blockers / acceptance tests
-- The invite-code join RPC is installed; client-side direct self-join is disabled. Test it with real authenticated accounts before cutover.
-- Replace generic leader-only writes on `group_records` with per-collection policies. Students need narrowly scoped writes for task suggestions, progress and attendance responses.
-- Test leader/student accounts and prove cross-group reads and unauthorized writes fail.
-- Verify every source/destination count and file hash.
-- Keep Firebase as rollback until the new release passes real-user testing.
+## Security
 
-The initial JSONB compatibility table intentionally avoids losing undocumented Firestore fields. Normalize it only after a complete data inventory.
+All tables use Row Level Security. Members can read records for their groups. Leaders manage shared records. Students can create and update only their own task suggestions, task progress and attendance responses. Group joins are performed by the `join_group_with_invite` RPC. Never expose the Supabase service-role key in client code.
