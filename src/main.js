@@ -83,7 +83,9 @@ const state = {
   busy: false,
   authMode: 'login',
   liveUnsubscribers: [],
-  liveSubscriptionToken: 0
+  liveSubscriptionToken: 0,
+  deadlineMonth: today().slice(0, 7),
+  selectedDeadlineDate: today()
 };
 
 function notify(message, kind = 'info') {
@@ -481,6 +483,7 @@ function renderWorkspace() {
   const name = displayFullName(state.profile);
   const tabs = [
     navButton('overview', '⌂', 'Обзор'),
+    navButton('deadlines', '▣', 'Дедлайны'),
     navButton('schedule', '▦', 'Расписание и ДЗ'),
     ...(leader ? [navButton('moderation', '◇', 'Модерация <b>' + state.suggestions.filter(item => item.status === 'pending').length + '</b>')] : []),
     navButton('attendance', '◷', 'Посещаемость'),
@@ -500,6 +503,7 @@ function empty(title, text) {
 }
 
 function renderCurrentTab() {
+  if (state.tab === 'deadlines') return renderDeadlines();
   if (state.tab === 'tasks' || state.tab === 'schedule') return renderSchedule();
   if (state.tab === 'moderation' && state.role === 'leader') return renderModeration();
   if (state.tab === 'attendance') return renderAttendance();
@@ -507,6 +511,108 @@ function renderCurrentTab() {
     '<div class="grid-two"><article class="panel"><h2>Материалы группы</h2><p class="muted">Подключение файлов через Firebase Storage — следующий этап.</p></article><article class="panel"><h2>Лекции</h2><p class="muted">Отдельная библиотека лекций будет подключена к Firestore и Storage.</p></article></div>';
   if (state.tab === 'manage') return renderManage();
   return renderOverview();
+}
+
+function taskDeadlineDate(task) {
+  const value = task.dueDate || task.lessonDate || '';
+  if (!value) return '';
+  if (typeof value === 'string' && /^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return value;
+  const date = typeof value?.toDate === 'function' ? value.toDate() : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return localDateParts(date).iso;
+}
+
+function renderDeadlines() {
+  const [year, month] = (state.deadlineMonth || today().slice(0, 7)).split('-').map(Number);
+  const monthStart = new Date(year, month - 1, 1, 12);
+  const monthLabel = monthStart.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const leadingDays = (monthStart.getDay() + 6) % 7;
+  const weekdayLabels = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+  const tasksByDate = new Map();
+
+  state.tasks.forEach(task => {
+    const date = taskDeadlineDate(task);
+    if (!date) return;
+    if (!tasksByDate.has(date)) tasksByDate.set(date, []);
+    tasksByDate.get(date).push(task);
+  });
+
+  const monthTasks = Array.from(tasksByDate.entries())
+    .filter(([date]) => date.startsWith(state.deadlineMonth))
+    .flatMap(([, items]) => items);
+  const monthCompleted = monthTasks.filter(task => state.progress.get(task.id) === true).length;
+
+  const cells = [];
+  for (let index = 0; index < leadingDays; index++) {
+    cells.push('<div class="deadline-calendar-blank" aria-hidden="true"></div>');
+  }
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = [year, String(month).padStart(2, '0'), String(day).padStart(2, '0')].join('-');
+    const dayTasks = tasksByDate.get(date) || [];
+    const completed = dayTasks.filter(task => state.progress.get(task.id) === true).length;
+    const allDone = dayTasks.length > 0 && completed === dayTasks.length;
+    const selected = date === state.selectedDeadlineDate;
+    const isToday = date === today();
+    const statusClass = dayTasks.length ? (allDone ? ' has-deadlines all-complete' : ' has-deadlines has-pending') : '';
+    const selectedClass = selected ? ' selected' : '';
+    const todayClass = isToday ? ' today' : '';
+    const countLabel = dayTasks.length ? '<small>' + completed + '/' + dayTasks.length + '</small>' : '';
+    const ariaLabel = dateText(date) + (dayTasks.length ? ', выполнено ' + completed + ' из ' + dayTasks.length : ', нет заданий');
+    cells.push(
+      '<button type="button" class="deadline-calendar-day' + statusClass + selectedClass + todayClass +
+      '" data-deadline-date="' + date + '" aria-pressed="' + selected + '" aria-label="' + esc(ariaLabel) + '">' +
+      '<span class="deadline-day-number">' + day + '</span>' + countLabel +
+      (dayTasks.length && allDone ? '<span class="deadline-day-check" aria-hidden="true">✓</span>' : '') +
+      '</button>'
+    );
+  }
+
+  const selectedTasks = (tasksByDate.get(state.selectedDeadlineDate) || []).slice().sort((a,b) =>
+    String(a.lessonTime || '').localeCompare(String(b.lessonTime || '')) ||
+    String(a.subject || '').localeCompare(String(b.subject || ''), 'ru')
+  );
+  const selectedDateLabel = state.selectedDeadlineDate
+    ? new Date(state.selectedDeadlineDate + 'T12:00:00').toLocaleDateString('ru-RU', {
+        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+      })
+    : 'Выбери день';
+  const selectedCompleted = selectedTasks.filter(task => state.progress.get(task.id) === true).length;
+  const selectedSummary = selectedTasks.length
+    ? '<span class="deadline-day-progress' + (selectedCompleted === selectedTasks.length ? ' complete' : '') + '">' +
+      selectedCompleted + ' из ' + selectedTasks.length + ' выполнено</span>'
+    : '';
+  const selectedContent = selectedTasks.length
+    ? (selectedCompleted === selectedTasks.length
+        ? '<div class="deadline-complete-banner">✓ Все домашние задания на этот день выполнены</div>'
+        : '<div class="deadline-pending-banner">Осталось выполнить: ' + (selectedTasks.length - selectedCompleted) + '</div>') +
+      taskCards(selectedTasks)
+    : empty('На этот день дедлайнов нет', 'Выбери другую дату в календаре или добавь ДЗ к паре в расписании.');
+
+  return heading('УЧЕБНЫЙ ПРОЦЕСС', 'Дедлайны', 'Календарь домашних заданий и твой прогресс по каждому дню.') +
+    '<section class="deadline-calendar-panel">' +
+      '<div class="deadline-calendar-header">' +
+        '<div><p class="eyebrow">КАЛЕНДАРЬ ДЕДЛАЙНОВ</p><h2>' + esc(monthLabel) + '</h2></div>' +
+        '<div class="deadline-calendar-controls">' +
+          '<button type="button" class="btn ghost" data-action="deadline-today">Сегодня</button>' +
+          '<button type="button" class="deadline-month-arrow" data-action="deadline-month" data-offset="-1" aria-label="Предыдущий месяц">←</button>' +
+          '<button type="button" class="deadline-month-arrow" data-action="deadline-month" data-offset="1" aria-label="Следующий месяц">→</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="deadline-month-progress"><span>Выполнено в этом месяце</span><strong>' + monthCompleted + ' / ' + monthTasks.length + '</strong></div>' +
+      '<div class="deadline-calendar-grid deadline-weekdays">' + weekdayLabels.map(label => '<span>' + label + '</span>').join('') + '</div>' +
+      '<div class="deadline-calendar-grid deadline-days">' + cells.join('') + '</div>' +
+      '<div class="deadline-calendar-legend">' +
+        '<span><i class="legend-dot complete"></i>Всё выполнено</span>' +
+        '<span><i class="legend-dot pending"></i>Есть невыполненные</span>' +
+        '<span><i class="legend-dot empty"></i>Нет ДЗ</span>' +
+      '</div>' +
+    '</section>' +
+    '<section class="deadline-selected-section">' +
+      '<div class="deadline-selected-heading"><div><p class="eyebrow">ВЫБРАННЫЙ ДЕНЬ</p><h2>' + esc(selectedDateLabel) + '</h2></div>' + selectedSummary + '</div>' +
+      selectedContent +
+    '</section>';
 }
 
 function renderOverview() {
@@ -1538,11 +1644,19 @@ async function updateProgress(input) {
       updatedAt: serverTimestamp()
     }, { merge: true });
     state.progress.set(taskId, input.checked);
-    card?.classList.toggle('done', input.checked);
+    if (state.tab === 'deadlines') {
+      renderWorkspace();
+    } else {
+      card?.classList.toggle('done', input.checked);
+    }
     notify('Личный прогресс сохранён.', 'success');
   } catch (error) {
     input.checked = Boolean(current);
-    card?.classList.toggle('done', Boolean(current));
+    if (state.tab === 'deadlines') {
+      renderWorkspace();
+    } else {
+      card?.classList.toggle('done', Boolean(current));
+    }
     notify(error.message || 'Не удалось сохранить отметку.', 'error');
   } finally {
     setBusy(false);
@@ -1669,6 +1783,23 @@ function bindEvents() {
       renderWorkspace();
       root.querySelector('#homework-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
+    }
+
+    if (button.dataset.deadlineDate) {
+      state.selectedDeadlineDate = button.dataset.deadlineDate;
+      return renderWorkspace();
+    }
+    if (button.dataset.action === 'deadline-month') {
+      const [year, month] = state.deadlineMonth.split('-').map(Number);
+      const nextMonth = new Date(year, month - 1 + Number(button.dataset.offset || 0), 1, 12);
+      state.deadlineMonth = [nextMonth.getFullYear(), String(nextMonth.getMonth() + 1).padStart(2, '0')].join('-');
+      state.selectedDeadlineDate = [state.deadlineMonth, '01'].join('-');
+      return renderWorkspace();
+    }
+    if (button.dataset.action === 'deadline-today') {
+      state.deadlineMonth = today().slice(0, 7);
+      state.selectedDeadlineDate = today();
+      return renderWorkspace();
     }
 
     if (button.dataset.action === 'delete-task') return deleteTask(button.dataset.id);
