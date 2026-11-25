@@ -582,9 +582,9 @@ function renderProfile() {
       '</section>' +
       '<section class="panel profile-settings-card">' +
         '<p class="eyebrow">02 · ЛОГИН</p><h2>Изменить логин</h2>' +
-        '<p class="muted">Сейчас ты входишь как <strong>@' + esc(username) + '</strong>. Новый логин должен быть свободен.</p>' +
+        '<p class="muted">Твой текущий логин уже подставлен. Просто измени его на новый.</p>' +
         '<form id="username-form" class="form">' +
-          '<label>Новый логин<input name="username" type="text" minlength="3" maxlength="24" autocapitalize="none" spellcheck="false" autocomplete="username" pattern="[A-Za-z0-9][A-Za-z0-9._-]{2,23}" required placeholder="Новый логин"></label>' +
+          '<label>Логин<input name="username" type="text" minlength="3" maxlength="24" autocapitalize="none" spellcheck="false" autocomplete="username" pattern="[A-Za-z0-9][A-Za-z0-9._-]{2,23}" required value="' + esc(username) + '" placeholder="Логин"></label>' +
           '<label>Текущий пароль<input name="currentPassword" type="password" autocomplete="current-password" required placeholder="Для подтверждения личности"></label>' +
           '<small class="muted">После смены входи по новому логину. Пароль останется прежним.</small>' +
           '<button class="btn secondary" type="submit">Изменить логин</button>' +
