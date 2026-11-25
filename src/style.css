@@ -114,3 +114,8 @@
 .attendance-pick-hint{margin-top:12px}
 @media(max-width:900px){.attendance-person-row{grid-template-columns:1fr;gap:10px}.attendance-mark-buttons{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:680px){.student-attendance-page{padding:14px;border-radius:14px}.student-attendance-header{flex-direction:column}.student-attendance-date{width:100%}.attendance-all-actions{grid-template-columns:1fr;gap:8px}.attendance-all-button{min-height:54px;font-size:15px}.student-attendance-lesson{padding:13px}.student-attendance-lesson-title h2{font-size:16px}.student-attendance-lesson-actions{gap:8px}.attendance-choice{min-height:52px;font-size:14px}.attendance-lesson-grid{grid-template-columns:1fr}.attendance-register{padding:12px}.attendance-register-head{align-items:flex-start}.attendance-person-row{padding:12px}.attendance-mark-buttons{gap:6px}.attendance-mark{min-width:0;padding:8px 5px;min-height:49px;font-size:12px}.attendance-register-count{font-size:10px}}
+
+.task-card-actions{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:10px;flex:0 0 auto}
+.task-delete-button{border:1px solid #e3d7d5;background:#fff;color:#9a4138;border-radius:999px;padding:8px 12px;font-size:10px;font-weight:700;white-space:nowrap;transition:background .15s,border-color .15s}
+.task-delete-button:hover{background:#fff5f3;border-color:#c98b83}
+@media(max-width:680px){.task-card{align-items:flex-start;flex-direction:column}.task-card-actions{width:100%;flex-direction:row;align-items:center;justify-content:space-between}.task-delete-button{padding:8px 10px}}
