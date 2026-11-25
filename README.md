@@ -43,6 +43,7 @@ STUDIUM — платформа для учебных групп. Клиентс�
    - `202611260012_leader_invite_code_read.sql`
    - `202611260013_fix_student_attendance_response_rls.sql`
    - `202611260014_save_attendance_rpc.sql`
+   - `202611260015_fix_attendance_record_key.sql`
 4. В Project Settings → API скопируй Project URL и publishable key.
 5. Создай локальный `.env` на основе `.env.example` и укажи:
    - `VITE_SUPABASE_URL`
