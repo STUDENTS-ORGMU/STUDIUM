@@ -305,46 +305,53 @@ function renderAuth(mode = 'login', message = '') {
 }
 
 async function ensureProfile(user) {
-  const profileRef = doc(db, 'users', user.uid);
-  const snapshot = await getDoc(profileRef);
-  if (snapshot.exists()) {
-    const profile = snapshot.data();
-    const profilePatch = {};
-    if (!profile.username) {
-      const fromAuth = normalizeUsername((user.email || '').split('@')[0]);
-      profile.username = validUsername(fromAuth) ? fromAuth : fallbackUsername(user.uid);
-      profilePatch.username = profile.username;
-    }
-    if (typeof profile.patronymic !== 'string') {
-      profile.patronymic = '';
-      profilePatch.patronymic = '';
-    }
-    if (Object.keys(profilePatch).length) {
-      profilePatch.updatedAt = serverTimestamp();
-      await updateDoc(profileRef, profilePatch);
-    }
-    state.profile = profile;
-    await ensureUsernameAlias(user, profile.username);
-    return;
+  const { data, error } = await supabase.from('profiles')
+    .select('id, username, full_name, patronymic').eq('id', user.id).maybeSingle();
+  if (error) throw error;
+  let profile = data;
+  if (!profile) {
+    const username = normalizeUsername(user.user_metadata?.username || (user.email || '').split('@')[0]);
+    const fullName = String(user.user_metadata?.full_name || username || 'Студент');
+    const { data: created, error: insertError } = await supabase.from('profiles').insert({
+      id: user.id, username, full_name: fullName, patronymic: ''
+    }).select('id, username, full_name, patronymic').single();
+    if (insertError) throw insertError;
+    profile = created;
   }
-  const fromAuth = normalizeUsername((user.email || '').split('@')[0]);
-  const username = validUsername(fromAuth) ? fromAuth : fallbackUsername(user.uid);
-  const fullName = user.displayName || username || 'Студент';
-  const profile = {
-    fullName,
-    username,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp()
+  state.profile = {
+    fullName: profile.full_name || '',
+    patronymic: profile.patronymic || '',
+    username: profile.username || ''
   };
-  await setDoc(profileRef, profile);
-  state.profile = { fullName, patronymic: '', username };
-  await ensureUsernameAlias(user, username);
 }
 
 async function loadMemberships() {
-  const membershipsRef = collection(db, 'users', state.user.uid, 'groups');
-  const snapshot = await getDocs(membershipsRef);
-  state.memberships = snapshot.docs.map(item => ({ id: item.id, ...item.data() }));
+  const { data, error } = await supabase.from('group_members')
+    .select('group_id, role, display_name, joined_at, study_groups(id, name)')
+    .eq('user_id', state.user.id);
+  if (error) throw error;
+  state.memberships = (data || []).map(item => ({
+    id: item.group_id, groupId: item.group_id, role: item.role,
+    name: item.study_groups?.name || 'Учебная группа',
+    inviteCode: null, joinedAt: item.joined_at
+  }));
+}
+
+async function boot(user = null) {
+  state.user = user || null;
+  if (!state.user) {
+    stopLiveHomeworkUpdates();
+    state.profile = null;
+    state.group = null;
+    state.memberships = [];
+    return renderAuth(state.authMode || 'login');
+  }
+  await ensureProfile(state.user);
+  await loadMemberships();
+  if (!state.memberships.length) return renderOnboarding();
+  const saved = localStorage.getItem('studium-group');
+  const membership = state.memberships.find(item => item.groupId === saved) || state.memberships[0];
+  await selectGroup(membership.groupId);
 }
 
 // Recover a missing leader-membership document only for groups owned by this
