@@ -39,6 +39,7 @@ STUDIUM — платформа для учебных групп. Клиентс�
    - `202611260008_username_login_aliases.sql`
    - `202611260009_change_my_username.sql`
    - `202611260010_recent_auth_username_change.sql`
+   - `202611260011_backfill_username_logins.sql`
 4. В Project Settings → API скопируй Project URL и publishable key.
 5. Создай локальный `.env` на основе `.env.example` и укажи:
    - `VITE_SUPABASE_URL`
