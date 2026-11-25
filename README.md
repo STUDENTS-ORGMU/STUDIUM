@@ -36,6 +36,8 @@ STUDIUM — платформа для учебных групп. Клиентс�
    - `202611260005_revoke_rls_auto_enable.sql`
    - `202611260006_member_display_name.sql`
    - `202611260007_remove_legacy_columns.sql`
+   - `202611260008_username_login_aliases.sql`
+   - `202611260009_change_my_username.sql`
 4. В Project Settings → API скопируй Project URL и publishable key.
 5. Создай локальный `.env` на основе `.env.example` и укажи:
    - `VITE_SUPABASE_URL`
