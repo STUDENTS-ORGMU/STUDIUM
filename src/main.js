@@ -1791,13 +1791,11 @@ async function saveUsername(form) {
   setBusy(true);
   try {
     await reauthenticateCurrentUser(currentPassword);
-    const { data: existing, error: lookupError } = await supabase.from('profiles')
-      .select('id').eq('username', username).maybeSingle();
-    if (lookupError) throw lookupError;
-    if (existing && existing.id !== state.user.id) throw new Error('Этот логин уже занят другим аккаунтом. Выбери другой.');
-    const { error } = await supabase.from('profiles')
-      .update({ username, updated_at: new Date().toISOString() }).eq('id', state.user.id);
-    if (error) throw error;
+    const { error } = await supabase.rpc('change_my_username', { p_username: username });
+    if (error) {
+      if (error.code === '23505') throw new Error('Этот логин уже занят другим аккаунтом. Выбери другой.');
+      throw error;
+    }
     const { error: metadataError } = await supabase.auth.updateUser({ data: { username } });
     if (metadataError) throw metadataError;
     state.profile = { ...state.profile, username };
