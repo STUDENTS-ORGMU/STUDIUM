@@ -645,6 +645,7 @@ async function uploadGroupMaterial(form) {
   const materialRef = doc(collection(db, 'groups', state.group.id, 'materials'));
   const safeName = file.name.replace(/[\\/]/g, '_').replace(/[^\p{L}\p{N}._ -]/gu, '_').slice(0, 140) || 'file';
   const path = 'groups/' + state.group.id + '/materials/' + materialRef.id + '/' + safeName;
+  let metadataSaved = false;
   try {
     await uploadBytes(storageRef(storage, path), file, {
       contentType,
@@ -656,11 +657,19 @@ async function uploadGroupMaterial(form) {
       size: file.size, storagePath: path,
       createdBy: state.user.uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp()
     });
-    notify('Файл добавлен в материалы группы.', 'success');
-    await loadWorkspace();
-    renderWorkspace();
+    metadataSaved = true;
+    try {
+      await loadWorkspace();
+      renderWorkspace();
+      notify('Файл добавлен в материалы группы.', 'success');
+    } catch (refreshError) {
+      console.error('STUDIUM material list refresh failed:', refreshError);
+      notify('Файл загружен. Обнови страницу, если он не появился в списке.', 'success');
+    }
   } catch (error) {
-    try { await deleteObject(storageRef(storage, path)); } catch {}
+    if (!metadataSaved) {
+      try { await deleteObject(storageRef(storage, path)); } catch {}
+    }
     console.error('STUDIUM material upload failed:', error);
     notify(error.message || 'Не удалось загрузить файл. Проверь настройки Firebase Storage и правила доступа.', 'error');
   } finally {
