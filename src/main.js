@@ -30,6 +30,7 @@ const validUsername = value => /^[a-z0-9][a-z0-9._-]{2,23}$/.test(value);
 // project-local alias is internal only; users enter and see their username.
 const authEmailForUsername = username => `${username}@${import.meta.env.VITE_FIREBASE_AUTH_DOMAIN}`;
 const fallbackUsername = uid => `student_${String(uid).slice(0, 8).toLowerCase()}`;
+const displayFullName = profile => [profile?.fullName, profile?.patronymic].filter(Boolean).join(' ') || profile?.username || 'Пользователь';
 
 const today = () => {
   const d = new Date();
@@ -104,7 +105,7 @@ function renderSetup() {
 function renderAuth(mode = 'login', message = '') {
   const signup = mode === 'signup';
   state.authMode = mode;
-  frame('<main class="auth"><section class="auth-intro"><div class="monogram">S</div><p class="eyebrow">YOUR ACADEMIC SPACE</p><h1>STUDIUM</h1><p>Всё важное для учёбы — в одном пространстве.</p><div class="ornament">— ✦ —</div></section><section class="panel auth-panel"><div class="switch"><button type="button" data-mode="login" class="' + (!signup ? 'active' : '') + '">Войти</button><button type="button" data-mode="signup" class="' + (signup ? 'active' : '') + '">Регистрация</button></div><h2>' + (signup ? 'Создать аккаунт' : 'С возвращением') + '</h2><p class="muted">' + (message ? esc(message) : (signup ? 'Создай аккаунт, чтобы присоединиться к своей группе.' : 'Войди в своё учебное пространство.')) + '</p><form id="auth-form" class="form">' + (signup ? '<label>Имя и фамилия<input name="full_name" minlength="2" maxlength="80" autocomplete="name" required placeholder="Александр Иванов"></label>' : '') + '<label>Логин<input name="username" type="text" minlength="3" maxlength="24" autocapitalize="none" spellcheck="false" autocomplete="username" pattern="[A-Za-z0-9][A-Za-z0-9._-]{2,23}" required placeholder="student_01"><small class="muted">3–24 символа: латинские буквы, цифры, точка, дефис или подчёркивание.</small></label><label>Пароль<input name="password" type="password" minlength="8" autocomplete="' + (signup ? 'new-password' : 'current-password') + '" required placeholder="Не менее 8 символов"></label><button class="btn primary" type="submit">' + (signup ? 'Создать аккаунт' : 'Войти') + '</button></form><p class="foot muted">STUDIUM · учебное пространство твоей группы</p></section></main>');
+  frame('<main class="auth"><section class="auth-intro"><div class="monogram">S</div><p class="eyebrow">YOUR ACADEMIC SPACE</p><h1>STUDIUM</h1><p>Всё важное для учёбы — в одном пространстве.</p><div class="ornament">— ✦ —</div></section><section class="panel auth-panel"><div class="switch"><button type="button" data-mode="login" class="' + (!signup ? 'active' : '') + '">Войти</button><button type="button" data-mode="signup" class="' + (signup ? 'active' : '') + '">Регистрация</button></div><h2>' + (signup ? 'Создать аккаунт' : 'С возвращением') + '</h2><p class="muted">' + (message ? esc(message) : (signup ? 'Создай аккаунт, чтобы присоединиться к своей группе.' : 'Войди в своё учебное пространство.')) + '</p><form id="auth-form" class="form">' + (signup ? '<label>Имя и фамилия<input name="full_name" minlength="2" maxlength="80" autocomplete="name" required placeholder="Александр Иванов"></label><label>Отчество <span class="muted">(необязательно)</span><input name="patronymic" maxlength="80" autocomplete="additional-name" placeholder="Александрович"></label>' : '') + '<label>Логин<input name="username" type="text" minlength="3" maxlength="24" autocapitalize="none" spellcheck="false" autocomplete="username" pattern="[A-Za-z0-9][A-Za-z0-9._-]{2,23}" required placeholder="student_01"><small class="muted">3–24 символа: латинские буквы, цифры, точка, дефис или подчёркивание.</small></label><label>Пароль<input name="password" type="password" minlength="8" autocomplete="' + (signup ? 'new-password' : 'current-password') + '" required placeholder="Не менее 8 символов"></label><button class="btn primary" type="submit">' + (signup ? 'Создать аккаунт' : 'Войти') + '</button></form><p class="foot muted">STUDIUM · учебное пространство твоей группы</p></section></main>');
 }
 
 async function ensureProfile(user) {
@@ -112,13 +113,19 @@ async function ensureProfile(user) {
   const snapshot = await getDoc(profileRef);
   if (snapshot.exists()) {
     const profile = snapshot.data();
+    const profilePatch = {};
     if (!profile.username) {
       const fromAuth = normalizeUsername((user.email || '').split('@')[0]);
       profile.username = validUsername(fromAuth) ? fromAuth : fallbackUsername(user.uid);
-      await updateDoc(profileRef, {
-        username: profile.username,
-        updatedAt: serverTimestamp()
-      });
+      profilePatch.username = profile.username;
+    }
+    if (typeof profile.patronymic !== 'string') {
+      profile.patronymic = '';
+      profilePatch.patronymic = '';
+    }
+    if (Object.keys(profilePatch).length) {
+      profilePatch.updatedAt = serverTimestamp();
+      await updateDoc(profileRef, profilePatch);
     }
     state.profile = profile;
     return;
@@ -133,7 +140,7 @@ async function ensureProfile(user) {
     updatedAt: serverTimestamp()
   };
   await setDoc(profileRef, profile);
-  state.profile = { fullName, username };
+  state.profile = { fullName, patronymic: '', username };
 }
 
 async function loadMemberships() {
@@ -216,7 +223,7 @@ function navButton(tab, icon, title) {
 
 function renderWorkspace() {
   const leader = state.role === 'leader';
-  const name = state.profile?.fullName || state.profile?.username || 'Пользователь';
+  const name = displayFullName(state.profile);
   const tabs = [
     navButton('overview', '⌂', 'Обзор'),
     navButton('tasks', '✓', 'Домашние задания'),
@@ -253,7 +260,7 @@ function renderOverview() {
   const pending = state.suggestions.filter(item => item.status === 'pending').length;
   const completed = state.tasks.filter(item => state.progress.get(item.id)).length;
   const nextTask = state.tasks.find(item => item.dueDate);
-  return heading('STUDIUM / ОБЗОР', 'Добро пожаловать', esc(state.profile?.fullName || 'в твоё учебное пространство'), '<button class="btn primary" data-tab="tasks">Открыть задания →</button>') +
+  return heading('STUDIUM / ОБЗОР', 'Добро пожаловать', esc(displayFullName(state.profile)), '<button class="btn primary" data-tab="tasks">Открыть задания →</button>') +
     '<div class="stats"><article><small>Заданий в группе</small><strong>' + state.tasks.length + '</strong></article><article><small>Выполнено тобой</small><strong>' + completed + '</strong></article><article><small>Ближайший дедлайн</small><strong class="date-stat">' + esc(dateText(nextTask?.dueDate)) + '</strong></article><article><small>На модерации</small><strong>' + (state.role === 'leader' ? pending : '—') + '</strong></article></div>' +
     '<section class="section"><div class="section-title"><h2>Ближайшие задания</h2><button class="text-btn" data-tab="tasks">Все задания →</button></div>' + taskCards(state.tasks.slice(0,3)) + '</section>';
 }
@@ -392,21 +399,24 @@ async function submitAuth(form) {
   try {
     if (data.has('full_name')) {
       const fullName = String(data.get('full_name') || '').trim();
+      const patronymic = String(data.get('patronymic') || '').trim();
+      const displayName = [fullName, patronymic].filter(Boolean).join(' ');
       const credential = await createUserWithEmailAndPassword(auth, authIdentifier, password);
-      await updateProfile(credential.user, { displayName: fullName });
+      await updateProfile(credential.user, { displayName });
       const profileRef = doc(db, 'users', credential.user.uid);
       const existingProfile = await getDoc(profileRef);
       if (existingProfile.exists()) {
-        await updateDoc(profileRef, { fullName, username, updatedAt: serverTimestamp() });
+        await updateDoc(profileRef, { fullName, patronymic, username, updatedAt: serverTimestamp() });
       } else {
         await setDoc(profileRef, {
           fullName,
+          patronymic,
           username,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         });
       }
-      state.profile = { fullName, username };
+      state.profile = { fullName, patronymic, username };
       await boot(credential.user);
     } else {
       const credential = await signInWithEmailAndPassword(auth, authIdentifier, password);
@@ -447,7 +457,7 @@ async function createGroup(form) {
     });
     batch.set(memberRef, {
       userId: state.user.uid,
-      displayName: state.profile.fullName,
+      displayName: displayFullName(state.profile),
       role: 'leader',
       joinedAt: serverTimestamp()
     });
@@ -492,7 +502,7 @@ async function joinGroup(form) {
     const batch = writeBatch(db);
     batch.set(memberRef, {
       userId: state.user.uid,
-      displayName: state.profile.fullName,
+      displayName: displayFullName(state.profile),
       role: 'student',
       inviteCodeUsed: code,
       joinedAt: serverTimestamp()
