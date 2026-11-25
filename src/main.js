@@ -188,12 +188,11 @@ async function selectGroup(groupId) {
 
 async function loadWorkspace() {
   const gid = state.group.id;
-  const base = collection(db, 'groups', gid);
-  const tasksRef = collection(base, 'tasks');
-  const lessonsRef = collection(base, 'lessons');
-  const suggestionsRef = collection(base, 'taskSuggestions');
-  const progressRef = collection(base, 'taskProgress');
-  const attendanceRef = collection(base, 'attendanceResponses');
+  const tasksRef = collection(db, 'groups', gid, 'tasks');
+  const lessonsRef = collection(db, 'groups', gid, 'lessons');
+  const suggestionsRef = collection(db, 'groups', gid, 'taskSuggestions');
+  const progressRef = collection(db, 'groups', gid, 'taskProgress');
+  const attendanceRef = collection(db, 'groups', gid, 'attendanceResponses');
 
   const taskQuery = query(tasksRef, orderBy('dueDate', 'asc'));
   const lessonQuery = query(lessonsRef, orderBy('weekday', 'asc'), orderBy('weekNumber', 'asc'), orderBy('startsAt', 'asc'));
