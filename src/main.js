@@ -1410,18 +1410,16 @@ function renderAttendance() {
 }
 
 async function saveAttendance(lessonId, response, partKey = null) {
-  const responseId = attendanceDocumentId(lessonId, state.user.uid, partKey);
-  const responseRef = doc(db, 'groups', state.group.id, 'attendanceResponses', responseId);
   setBusy(true);
   try {
-    await setDoc(responseRef, {
-      lessonId,
-      userId: state.user.uid,
-      lessonDate: state.attendanceDate,
-      ...(partKey ? { partKey } : {}),
-      response,
-      updatedAt: serverTimestamp()
-    }, { merge: true });
+    const { error: responseError } = await supabase.rpc('save_my_attendance_response', {
+      p_group_id: state.group.id,
+      p_lesson_id: lessonId,
+      p_lesson_date: state.attendanceDate,
+      p_part_key: partKey || '',
+      p_response: response
+    });
+    if (responseError) throw responseError;
 
     let autoMarked = true;
     try {
@@ -1470,19 +1468,17 @@ async function saveAttendanceForAll(response) {
   if (!entries.length) return notify('На эту дату пар нет.');
   setBusy(true);
   try {
-    const batch = writeBatch(db);
-    entries.forEach(({lesson,part}) => {
-      const responseId = attendanceDocumentId(lesson.id, state.user.uid, part.partKey);
-      batch.set(doc(db, 'groups', state.group.id, 'attendanceResponses', responseId), {
-        lessonId: lesson.id,
-        userId: state.user.uid,
-        lessonDate: state.attendanceDate,
-        ...(part.partKey ? { partKey: part.partKey } : {}),
-        response,
-        updatedAt: serverTimestamp()
-      }, { merge: true });
-    });
-    await batch.commit();
+    const responseResults = await Promise.all(entries.map(({lesson,part}) =>
+      supabase.rpc('save_my_attendance_response', {
+        p_group_id: state.group.id,
+        p_lesson_id: lesson.id,
+        p_lesson_date: state.attendanceDate,
+        p_part_key: part.partKey || '',
+        p_response: response
+      })
+    ));
+    const responseError = responseResults.find(result => result.error)?.error;
+    if (responseError) throw responseError;
 
     let automaticCount = 0;
     let protectedCount = 0;
