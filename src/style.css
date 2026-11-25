@@ -513,3 +513,27 @@
   .form-two-fields{grid-template-columns:1fr}
   .profile-settings-card .btn{width:100%}
 }
+
+
+/* Independent attendance controls for each part of a double lesson */
+.attendance-subparts{display:flex;flex-direction:column;gap:9px}
+.attendance-subpart.is-split{padding:11px 12px;border:1px solid #e7e5df;border-radius:11px;background:#faf9f7}
+.attendance-subpart-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:9px}
+.attendance-subpart-heading strong{font-size:12px;color:#171717;font-weight:700}
+.attendance-subpart-heading span{font-size:11px;color:#777;white-space:nowrap}
+.attendance-subpart-response{margin-top:7px}
+.attendance-subpart-response .attendance-response{display:inline-block}
+.attendance-part-selector{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 14px}
+.attendance-part-tab{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:150px;padding:10px 13px;border:1px solid #dedbd4;border-radius:10px;background:#fff;color:#333;text-align:left;transition:.15s}
+.attendance-part-tab strong{font-size:12px}
+.attendance-part-tab small{font-size:10px;color:#777}
+.attendance-part-tab:hover{background:#f7f6f3;border-color:#bcb8ae}
+.attendance-part-tab.active{background:#f1f0ed;border-color:#171717;color:#171717;box-shadow:inset 0 0 0 1px #171717}
+.attendance-part-tab.active small{color:#555}
+.attendance-lesson-card>small{display:block;margin-top:6px;line-height:1.45}
+@media(max-width:680px){
+  .attendance-subpart.is-split{padding:10px}
+  .attendance-subpart-heading{align-items:flex-start;flex-direction:column;gap:3px}
+  .attendance-part-selector{display:grid;grid-template-columns:1fr 1fr}
+  .attendance-part-tab{min-width:0;padding:9px}
+}
