@@ -1607,11 +1607,8 @@ async function saveUsername(form) {
     const newAliasSnapshot = await getDoc(newAliasRef);
     const newAliasData = newAliasSnapshot.exists() ? newAliasSnapshot.data() : null;
 
-    // A login is occupied only when its active alias belongs to another account.
-    // A previous interrupted rename may already have created this user's alias.
-    if (newAliasData?.disabled === true) {
-      throw new Error('Этот логин был ранее отключён. Выбери другой.');
-    }
+    // A previously used login can be reclaimed by its original account.
+    // It remains unavailable to every other account while disabled.
     if (newAliasData && newAliasData.authEmail !== state.user.email) {
       throw new Error('Этот логин уже занят другим аккаунтом. Выбери другой.');
     }
@@ -1626,15 +1623,16 @@ async function saveUsername(form) {
     }
 
     const batch = writeBatch(db);
-    // Do not try to recreate an alias that is already active for this same account.
     if (!newAliasSnapshot.exists()) {
       batch.set(newAliasRef, {
         authEmail: state.user.email,
         createdAt: serverTimestamp()
       });
+    } else if (newAliasData?.disabled === true) {
+      // Re-activate this account's own previously used login.
+      batch.update(newAliasRef, { disabled: false });
     }
-    // Retain a disabled tombstone so the previous login can never fall back
-    // to the original Firebase alias and open this same account again.
+    // Keep the login being left reserved to this account, but inactive.
     batch.update(oldAliasRef, { disabled: true });
     batch.update(doc(db, 'users', state.user.uid), {
       username,
