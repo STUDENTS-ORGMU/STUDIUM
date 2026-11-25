@@ -1,3 +1,9 @@
+-- Let a newly created group's owner read it before the first membership row exists.
+drop policy if exists "creator reads own group" on public.study_groups;
+create policy "creator reads own group" on public.study_groups
+for select to authenticated
+using (created_by = (select auth.uid()));
+
 -- STUDIUM: allow a group creator to bootstrap their leader membership,
 -- and allow students to write only their own submissions and progress.
 drop policy if exists "creator adds own leader membership" on public.group_members;
