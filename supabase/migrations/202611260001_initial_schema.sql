@@ -1,17 +1,16 @@
--- STUDIUM migration foundation. Firestore IDs and raw payloads are retained.
+-- STUDIUM Supabase-only schema foundation.
 create extension if not exists pgcrypto;
 
 create table if not exists public.profiles (
  id uuid primary key references auth.users(id) on delete cascade,
  username text unique, full_name text not null default '', patronymic text not null default '',
- legacy_firebase_uid text unique, legacy_auth_email text,
  data jsonb not null default '{}'::jsonb,
  created_at timestamptz not null default now(), updated_at timestamptz not null default now()
 );
 create table if not exists public.study_groups (
  id text primary key, name text not null,
  created_by uuid references public.profiles(id) on delete set null,
- legacy_created_by text, data jsonb not null default '{}'::jsonb,
+ data jsonb not null default '{}'::jsonb,
  created_at timestamptz not null default now(), updated_at timestamptz not null default now()
 );
 create table if not exists public.group_members (
@@ -32,7 +31,7 @@ create table if not exists public.group_records (
  group_id text not null references public.study_groups(id) on delete cascade,
  collection_name text not null, record_id text not null,
  owner_user_id uuid references public.profiles(id) on delete set null,
- legacy_owner_uid text, data jsonb not null default '{}'::jsonb,
+ data jsonb not null default '{}'::jsonb,
  created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
  primary key(group_id,collection_name,record_id)
 );
