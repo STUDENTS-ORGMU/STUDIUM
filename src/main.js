@@ -24,6 +24,13 @@ import {
 } from 'firebase/firestore';
 
 const root = document.querySelector('#app');
+const normalizeUsername = value => String(value ?? '').trim().toLowerCase();
+const validUsername = value => /^[a-z0-9][a-z0-9._-]{2,23}$/.test(value);
+// Firebase Email/Password requires an email-shaped identifier. This reserved
+// project-local alias is internal only; users enter and see their username.
+const authEmailForUsername = username => `${username}@studium-99b06.firebaseapp.com`;
+const fallbackUsername = uid => `student_${String(uid).slice(0, 8).toLowerCase()}`;
+
 const today = () => {
   const d = new Date();
   return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-');
@@ -97,25 +104,36 @@ function renderSetup() {
 function renderAuth(mode = 'login', message = '') {
   const signup = mode === 'signup';
   state.authMode = mode;
-  frame('<main class="auth"><section class="auth-intro"><div class="monogram">S</div><p class="eyebrow">YOUR ACADEMIC SPACE</p><h1>STUDIUM</h1><p>Всё важное для учёбы — в одном пространстве.</p><div class="ornament">— ✦ —</div></section><section class="panel auth-panel"><div class="switch"><button type="button" data-mode="login" class="' + (!signup ? 'active' : '') + '">Войти</button><button type="button" data-mode="signup" class="' + (signup ? 'active' : '') + '">Регистрация</button></div><h2>' + (signup ? 'Создать аккаунт' : 'С возвращением') + '</h2><p class="muted">' + (message ? esc(message) : (signup ? 'Создай аккаунт, чтобы присоединиться к своей группе.' : 'Войди в своё учебное пространство.')) + '</p><form id="auth-form" class="form">' + (signup ? '<label>Имя и фамилия<input name="full_name" minlength="2" maxlength="80" autocomplete="name" required placeholder="Александр Иванов"></label>' : '') + '<label>Email<input name="email" type="email" autocomplete="email" required placeholder="name@example.com"></label><label>Пароль<input name="password" type="password" minlength="8" autocomplete="' + (signup ? 'new-password' : 'current-password') + '" required placeholder="Не менее 8 символов"></label><button class="btn primary" type="submit">' + (signup ? 'Создать аккаунт' : 'Войти') + '</button></form><p class="foot muted">STUDIUM · учебное пространство твоей группы</p></section></main>');
+  frame('<main class="auth"><section class="auth-intro"><div class="monogram">S</div><p class="eyebrow">YOUR ACADEMIC SPACE</p><h1>STUDIUM</h1><p>Всё важное для учёбы — в одном пространстве.</p><div class="ornament">— ✦ —</div></section><section class="panel auth-panel"><div class="switch"><button type="button" data-mode="login" class="' + (!signup ? 'active' : '') + '">Войти</button><button type="button" data-mode="signup" class="' + (signup ? 'active' : '') + '">Регистрация</button></div><h2>' + (signup ? 'Создать аккаунт' : 'С возвращением') + '</h2><p class="muted">' + (message ? esc(message) : (signup ? 'Создай аккаунт, чтобы присоединиться к своей группе.' : 'Войди в своё учебное пространство.')) + '</p><form id="auth-form" class="form">' + (signup ? '<label>Имя и фамилия<input name="full_name" minlength="2" maxlength="80" autocomplete="name" required placeholder="Александр Иванов"></label>' : '') + '<label>Логин<input name="username" type="text" minlength="3" maxlength="24" autocapitalize="none" spellcheck="false" autocomplete="username" pattern="[A-Za-z0-9][A-Za-z0-9._-]{2,23}" required placeholder="student_01"><small class="muted">3–24 символа: латинские буквы, цифры, точка, дефис или подчёркивание.</small></label><label>Пароль<input name="password" type="password" minlength="8" autocomplete="' + (signup ? 'new-password' : 'current-password') + '" required placeholder="Не менее 8 символов"></label><button class="btn primary" type="submit">' + (signup ? 'Создать аккаунт' : 'Войти') + '</button></form><p class="foot muted">STUDIUM · учебное пространство твоей группы</p></section></main>');
 }
 
 async function ensureProfile(user) {
   const profileRef = doc(db, 'users', user.uid);
   const snapshot = await getDoc(profileRef);
   if (snapshot.exists()) {
-    state.profile = snapshot.data();
+    const profile = snapshot.data();
+    if (!profile.username) {
+      const fromAuth = normalizeUsername((user.email || '').split('@')[0]);
+      profile.username = validUsername(fromAuth) ? fromAuth : fallbackUsername(user.uid);
+      await updateDoc(profileRef, {
+        username: profile.username,
+        updatedAt: serverTimestamp()
+      });
+    }
+    state.profile = profile;
     return;
   }
-  const fullName = user.displayName || (user.email || '').split('@')[0] || 'Студент';
+  const fromAuth = normalizeUsername((user.email || '').split('@')[0]);
+  const username = validUsername(fromAuth) ? fromAuth : fallbackUsername(user.uid);
+  const fullName = user.displayName || username || 'Студент';
   const profile = {
     fullName,
-    email: user.email || '',
+    username,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp()
   };
   await setDoc(profileRef, profile);
-  state.profile = { fullName, email: user.email || '' };
+  state.profile = { fullName, username };
 }
 
 async function loadMemberships() {
@@ -198,7 +216,7 @@ function navButton(tab, icon, title) {
 
 function renderWorkspace() {
   const leader = state.role === 'leader';
-  const name = state.profile?.fullName || state.user.email || 'Пользователь';
+  const name = state.profile?.fullName || state.profile?.username || 'Пользователь';
   const tabs = [
     navButton('overview', '⌂', 'Обзор'),
     navButton('tasks', '✓', 'Домашние задания'),
@@ -209,7 +227,7 @@ function renderWorkspace() {
     navButton('manage', '⚙', 'Группа')
   ].join('');
 
-  frame('<div class="layout"><aside class="sidebar"><a class="wordmark" href="#">STUDIUM</a><div class="group-box"><small>УЧЕБНАЯ ГРУППА</small><strong>' + esc(state.group.name) + '</strong><span class="role">' + (leader ? 'Староста' : 'Студент') + '</span></div><nav>' + tabs + '</nav><div class="side-user"><div class="avatar">' + esc(name.slice(0,1).toUpperCase()) + '</div><div><strong>' + esc(name) + '</strong><small>' + esc(state.user.email) + '</small></div><button class="btn ghost" data-action="logout">Выйти</button></div></aside><main class="main"><header class="mobile-head"><button class="btn ghost" data-action="menu">☰</button><a class="wordmark" href="#">STUDIUM</a><span class="role">' + (leader ? 'Староста' : 'Студент') + '</span></header><div class="content">' + renderCurrentTab() + '</div></main></div>');
+  frame('<div class="layout"><aside class="sidebar"><a class="wordmark" href="#">STUDIUM</a><div class="group-box"><small>УЧЕБНАЯ ГРУППА</small><strong>' + esc(state.group.name) + '</strong><span class="role">' + (leader ? 'Староста' : 'Студент') + '</span></div><nav>' + tabs + '</nav><div class="side-user"><div class="avatar">' + esc(name.slice(0,1).toUpperCase()) + '</div><div><strong>' + esc(name) + '</strong><small>' + esc(state.profile?.username ? '@' + state.profile.username : '') + '</small></div><button class="btn ghost" data-action="logout">Выйти</button></div></aside><main class="main"><header class="mobile-head"><button class="btn ghost" data-action="menu">☰</button><a class="wordmark" href="#">STUDIUM</a><span class="role">' + (leader ? 'Староста' : 'Студент') + '</span></header><div class="content">' + renderCurrentTab() + '</div></main></div>');
 }
 
 function heading(eyebrow, title, subtitle, action = '') {
@@ -360,37 +378,45 @@ function bindEvents() {
 
 async function submitAuth(form) {
   const data = new FormData(form);
-  const email = String(data.get('email') || '').trim().toLowerCase();
+  const username = normalizeUsername(data.get('username'));
   const password = String(data.get('password') || '');
+
+  if (!validUsername(username)) {
+    notify('Логин: 3–24 символа, начни с буквы или цифры. Разрешены латинские буквы, цифры, точка, дефис и подчёркивание.', 'error');
+    return;
+  }
+
+  // The visible login is mapped to a deterministic internal Firebase email alias.
+  const authIdentifier = authEmailForUsername(username);
   setBusy(true);
   try {
     if (data.has('full_name')) {
       const fullName = String(data.get('full_name') || '').trim();
-      const credential = await createUserWithEmailAndPassword(auth, email, password);
+      const credential = await createUserWithEmailAndPassword(auth, authIdentifier, password);
       await updateProfile(credential.user, { displayName: fullName });
       const profileRef = doc(db, 'users', credential.user.uid);
       const existingProfile = await getDoc(profileRef);
       if (existingProfile.exists()) {
-        await updateDoc(profileRef, { fullName, updatedAt: serverTimestamp() });
+        await updateDoc(profileRef, { fullName, username, updatedAt: serverTimestamp() });
       } else {
         await setDoc(profileRef, {
           fullName,
-          email,
+          username,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         });
       }
-      state.profile = { fullName, email };
+      state.profile = { fullName, username };
       await boot(credential.user);
     } else {
-      const credential = await signInWithEmailAndPassword(auth, email, password);
+      const credential = await signInWithEmailAndPassword(auth, authIdentifier, password);
       await boot(credential.user);
     }
   } catch (error) {
-    const message = error.code === 'auth/email-already-in-use' ? 'Этот email уже зарегистрирован.' :
-      error.code === 'auth/invalid-credential' ? 'Неверный email или пароль.' :
+    const message = error.code === 'auth/email-already-in-use' ? 'Этот логин уже занят. Выбери другой.' :
+      error.code === 'auth/invalid-credential' ? 'Неверный логин или пароль.' :
       error.code === 'auth/weak-password' ? 'Пароль должен содержать не менее 8 символов.' :
-      error.code === 'auth/invalid-email' ? 'Проверь правильность email.' :
+      error.code === 'auth/invalid-email' ? 'Проверь логин: используй латинские буквы, цифры, точку, дефис или подчёркивание.' :
       error.message || 'Ошибка авторизации.';
     notify(message, 'error');
   } finally {
