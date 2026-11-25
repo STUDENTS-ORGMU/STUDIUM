@@ -1229,18 +1229,28 @@ function renderAttendanceRoster(lesson, partKey = null) {
     const userId = member.id || member.userId;
     const name = member.displayName || member.fullName || member.username || 'Участник';
     const response = responses.get(userId)?.response || '';
-    const status = records.get(userId)?.status || '';
+    const officialStatus = records.get(userId)?.status || '';
+    // Student response preselects a provisional register button. The leader's
+    // official mark always takes precedence and can be changed independently.
+    const suggestedStatus = response === 'will_attend' ? 'present'
+      : (response === 'will_miss' ? 'absent' : '');
     const role = member.role === 'leader' ? '<span class="roster-role">Староста</span>' : '';
     const responseText = response === 'will_attend' ? 'Ответ: будет на этой части'
-      : (response === 'will_miss' ? 'Ответ: не будет на этой части' : 'Ответ: пока не дан');
+      : (response === 'will_miss' ? 'Ответ: не будет на этой части · причину обсудить со старостой' : 'Ответ: пока не дан');
     const responseClass = response === 'will_attend' ? ' positive'
       : (response === 'will_miss' ? ' negative' : '');
-    const lateNote = status === 'late' ? '<span class="roster-late-note">Последняя отметка: опоздал</span>' : '';
-    const mark = (value, label, cls) =>
-      '<button type="button" class="attendance-mark ' + cls + (status === value ? ' active' : '') +
+    const lateNote = officialStatus === 'late' ? '<span class="roster-late-note">Последняя отметка: опоздал</span>' : '';
+    const mark = (value, label, cls) => {
+      const isOfficial = officialStatus === value;
+      const isSuggested = !officialStatus && suggestedStatus === value;
+      return '<button type="button" class="attendance-mark ' + cls +
+      (isOfficial ? ' active' : (isSuggested ? ' suggested' : '')) +
       '" data-official-status="' + value + '" data-student="' + esc(userId) +
       '" data-lesson="' + esc(lesson.id) + '"' + partAttribute +
-      ' aria-pressed="' + (status === value) + '">' + label + '</button>';
+      ' aria-pressed="' + (isOfficial || isSuggested) + '"' +
+      (isSuggested ? ' title="Предварительно по ответу студента; подтвердите отметку"' : '') +
+      '>' + label + '</button>';
+    };
     return '<article data-key="attendance-person-' + esc(userId) + '-' + esc(partKey || 'whole') + '" class="attendance-person-row"><div class="attendance-person-info"><strong>' + esc(name) + '</strong>' + role +
       '<small class="attendance-person-response' + responseClass + '">' + responseText + '</small>' + lateNote + '</div>' +
       '<div class="attendance-mark-buttons">' +
@@ -1552,7 +1562,7 @@ async function saveOfficialAttendance(studentId, lessonId, status, partKey = nul
         lessonDate: state.attendanceDate,
         ...(partKey ? { partKey } : {}),
         status,
-        reason: status === 'excused' ? 'Уважительная причина' : '',
+        reason: '',
         source: 'leader',
         markedBy: state.user.uid,
         markedAt: serverTimestamp(),
