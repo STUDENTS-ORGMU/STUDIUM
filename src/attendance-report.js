@@ -109,8 +109,18 @@ function attendanceEvents(records, lessonsById) {
   );
 }
 
-function addBorders(range, color = '777777', style = 'thin') {
-  range.eachCell(cell => {
+function eachCellInRect(sheet, startRow, startCol, endRow, endCol, callback) {
+  for (let row = startRow; row <= endRow; row++) {
+    for (let col = startCol; col <= endCol; col++) callback(sheet.getCell(row, col), row, col);
+  }
+}
+
+function styleRect(sheet, startRow, startCol, endRow, endCol, style) {
+  eachCellInRect(sheet, startRow, startCol, endRow, endCol, cell => Object.assign(cell, style));
+}
+
+function addBorders(sheet, startRow, startCol, endRow, endCol, color = '777777', style = 'thin') {
+  eachCellInRect(sheet, startRow, startCol, endRow, endCol, cell => {
     cell.border = {
       top: { style, color: { argb: 'FF' + color } },
       left: { style, color: { argb: 'FF' + color } },
@@ -222,11 +232,13 @@ function buildAttendanceWorkbook(ExcelJS, { month, groupName, leaderName, member
   sheet.getCell('AI6').value = 'уваж.';
   sheet.getCell('AJ6').value = 'неуваж.';
 
-  const header = sheet.getRange('A5:AJ6');
-  header.font = { name: 'Arial', size: 9, bold: true };
-  header.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEAEAEA' } };
-  header.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-  addBorders(header, '333333');
+  const headerStyle = {
+    font: { name: 'Arial', size: 9, bold: true },
+    fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEAEAEA' } },
+    alignment: { horizontal: 'center', vertical: 'middle', wrapText: true }
+  };
+  styleRect(sheet, 5, 1, 6, 36, headerStyle);
+  addBorders(sheet, 5, 1, 6, 36, '333333');
   sheet.getRow(5).height = 24;
   sheet.getRow(6).height = 22;
 
@@ -256,12 +268,15 @@ function buildAttendanceWorkbook(ExcelJS, { month, groupName, leaderName, member
   });
 
   const lastDataRow = Math.max(firstDataRow + knownMembers.length - 1, firstDataRow);
-  const dataRange = sheet.getRange('A' + firstDataRow + ':AJ' + lastDataRow);
-  dataRange.font = { name: 'Arial', size: 9 };
-  dataRange.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-  sheet.getRange('B' + firstDataRow + ':B' + lastDataRow).alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
-  addBorders(sheet.getRange('A' + firstDataRow + ':AJ' + lastDataRow), '777777');
-  sheet.getRange('AH' + firstDataRow + ':AJ' + lastDataRow).font = { name: 'Arial', size: 9, bold: true };
+  styleRect(sheet, firstDataRow, 1, lastDataRow, 36, {
+    font: { name: 'Arial', size: 9 },
+    alignment: { vertical: 'middle', horizontal: 'center', wrapText: true }
+  });
+  styleRect(sheet, firstDataRow, 2, lastDataRow, 2, {
+    alignment: { vertical: 'middle', horizontal: 'left', wrapText: true }
+  });
+  addBorders(sheet, firstDataRow, 1, lastDataRow, 36, '777777');
+  styleRect(sheet, firstDataRow, 34, lastDataRow, 36, { font: { name: 'Arial', size: 9, bold: true } });
 
   const footerRow = lastDataRow + 2;
   sheet.mergeCells(footerRow, 2, footerRow, 10);
@@ -304,7 +319,7 @@ function buildAttendanceWorkbook(ExcelJS, { month, groupName, leaderName, member
     row.getCell(5).alignment = { horizontal: 'center', vertical: 'middle' };
     row.getCell(6).alignment = { horizontal: 'center', vertical: 'middle' };
   });
-  addBorders(detail.getRange('A1:G' + detailLastRow), 'D4D4D4');
+  addBorders(detail, 1, 1, detailLastRow, 7, 'D4D4D4');
   detail.autoFilter = { from: 'A1', to: 'G' + detailLastRow };
 
   const note = detail.addRow(['', '', '', '', '', '', '']);
