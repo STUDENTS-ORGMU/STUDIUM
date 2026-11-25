@@ -1482,7 +1482,7 @@ async function submitAuth(form) {
   setBusy(true);
   try {
     if (data.has('full_name')) {
-      const fullName = String(data.get('full_name') || '').trim().replace(/\\s+/g, ' ');
+      const fullName = String(data.get('full_name') || '').trim().replace(/\s+/g, ' ');
       if (fullName.length < 2) throw new Error('Укажи ФИО полностью.');
       const existingAlias = await readUsernameAlias(username);
       if (existingAlias) throw new Error('Этот логин уже занят. Выбери другой.');
@@ -1543,7 +1543,7 @@ function profilePermissionMessage(error) {
 }
 
 async function saveProfile(form) {
-  const fullName = String(new FormData(form).get('fullName') || '').trim().replace(/\\s+/g, ' ');
+  const fullName = String(new FormData(form).get('fullName') || '').trim().replace(/\s+/g, ' ');
   if (fullName.length < 2) return notify('Укажи ФИО полностью.', 'error');
 
   setBusy(true);
