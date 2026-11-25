@@ -1840,103 +1840,53 @@ function profilePermissionMessage(error) {
 async function saveProfile(form) {
   const fullName = String(new FormData(form).get('fullName') || '').trim().replace(/\s+/g, ' ');
   if (fullName.length < 2) return notify('Укажи ФИО полностью.', 'error');
-
   setBusy(true);
   try {
-    const membershipSnapshots = await Promise.all(state.memberships.map(membership =>
-      getDoc(doc(db, 'groups', membership.groupId, 'members', state.user.uid))
-    ));
-    const batch = writeBatch(db);
-    batch.update(doc(db, 'users', state.user.uid), {
-      fullName,
-      patronymic: '',
-      updatedAt: serverTimestamp()
-    });
-    membershipSnapshots.forEach(snapshot => {
-      if (snapshot.exists()) batch.update(snapshot.ref, { displayName: fullName });
-    });
-    await batch.commit();
-
+    const { error: profileError } = await supabase.from('profiles')
+      .update({ full_name: fullName, patronymic: '', updated_at: new Date().toISOString() })
+      .eq('id', state.user.id);
+    if (profileError) throw profileError;
+    const { error: membersError } = await supabase.from('group_members')
+      .update({ display_name: fullName })
+      .eq('user_id', state.user.id);
+    if (membersError) throw membersError;
+    const { error: authError } = await supabase.auth.updateUser({ data: { full_name: fullName } });
+    if (authError) throw authError;
     state.profile = { ...state.profile, fullName, patronymic: '' };
     state.groupMembers = state.groupMembers.map(member =>
-      member.id === state.user.uid ? { ...member, displayName: fullName } : member
+      member.id === state.user.id ? { ...member, displayName: fullName } : member
     );
-    try {
-      await supabase.auth.updateUser({ data: { full_name: fullName } });
-    } catch (authProfileError) {
-      console.warn('STUDIUM: Supabase Auth metadata sync skipped.', authProfileError);
-    }
     notify('ФИО обновлено во всех твоих группах.', 'success');
     renderWorkspace();
   } catch (error) {
     notify(profilePermissionMessage(error), 'error');
-  } finally {
-    setBusy(false);
-  }
+  } finally { setBusy(false); }
 }
 
 async function saveUsername(form) {
-  const data = new FormData(form);
-  const username = normalizeUsername(data.get('username'));
-  const currentPassword = String(data.get('currentPassword') || '');
-  const oldUsername = normalizeUsername(state.profile?.username);
-
-  if (!validUsername(username)) {
-    notify('Логин: 3–24 символа, латинские буквы, цифры, точка, дефис или подчёркивание.', 'error');
-    return;
-  }
-  if (username === oldUsername) return notify('Это уже твой текущий логин.');
+  const username = normalizeUsername(new FormData(form).get('username'));
+  const currentPassword = String(new FormData(form).get('currentPassword') || '');
+  if (!validUsername(username)) return notify('Логин: 3–24 символа, латинские буквы, цифры, точка, дефис или подчёркивание.', 'error');
+  if (username === normalizeUsername(state.profile?.username)) return notify('Это уже твой текущий логин.');
   if (!currentPassword) return notify('Введи текущий пароль для подтверждения.', 'error');
-
   setBusy(true);
   try {
     await reauthenticateCurrentUser(currentPassword);
-
-    const newAliasRef = usernameAliasRef(username);
-    const newAliasSnapshot = await getDoc(newAliasRef);
-    const newAliasData = newAliasSnapshot.exists() ? newAliasSnapshot.data() : null;
-
-    // A previously used login can be reclaimed by its original account.
-    // It remains unavailable to every other account while disabled.
-    if (newAliasData && newAliasData.authEmail !== state.user.email) {
-      throw new Error('Этот логин уже занят другим аккаунтом. Выбери другой.');
-    }
-
-    const oldAliasRef = usernameAliasRef(oldUsername);
-    const oldAliasSnapshot = await getDoc(oldAliasRef);
-    if (!oldAliasSnapshot.exists()) {
-      throw new Error('Сначала обнови страницу после публикации новых правил Firestore, чтобы привязать текущий логин, затем повтори смену.');
-    }
-    if (oldAliasSnapshot.data().authEmail !== state.user.email || oldAliasSnapshot.data().disabled === true) {
-      throw new Error('Текущий логин не подтверждён для этого аккаунта. Изменение остановлено для защиты доступа.');
-    }
-
-    const batch = writeBatch(db);
-    if (!newAliasSnapshot.exists()) {
-      batch.set(newAliasRef, {
-        authEmail: state.user.email,
-        createdAt: serverTimestamp()
-      });
-    } else if (newAliasData?.disabled === true) {
-      // Re-activate this account's own previously used login.
-      batch.update(newAliasRef, { disabled: false });
-    }
-    // Keep the login being left reserved to this account, but inactive.
-    batch.update(oldAliasRef, { disabled: true });
-    batch.update(doc(db, 'users', state.user.uid), {
-      username,
-      updatedAt: serverTimestamp()
-    });
-    await batch.commit();
-
+    const { data: existing, error: lookupError } = await supabase.from('profiles')
+      .select('id').eq('username', username).maybeSingle();
+    if (lookupError) throw lookupError;
+    if (existing && existing.id !== state.user.id) throw new Error('Этот логин уже занят другим аккаунтом. Выбери другой.');
+    const { error } = await supabase.from('profiles')
+      .update({ username, updated_at: new Date().toISOString() }).eq('id', state.user.id);
+    if (error) throw error;
+    const { error: metadataError } = await supabase.auth.updateUser({ data: { username } });
+    if (metadataError) throw metadataError;
     state.profile = { ...state.profile, username };
     notify('Логин изменён. Теперь входи с @' + username + ' и прежним паролем.', 'success');
     renderWorkspace();
   } catch (error) {
     notify(profilePermissionMessage(error), 'error');
-  } finally {
-    setBusy(false);
-  }
+  } finally { setBusy(false); }
 }
 
 async function savePassword(form) {
