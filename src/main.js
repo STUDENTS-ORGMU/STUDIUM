@@ -251,9 +251,7 @@ async function loadWorkspace() {
   if (state.role !== 'leader') attendanceConstraints.push(where('userId', '==', state.user.uid));
   const attendanceQuery = query(attendanceRef, ...attendanceConstraints);
 
-  const leaderRosterQuery = state.role === 'leader'
-    ? getDocs(collection(db, 'groups', gid, 'members'))
-    : Promise.resolve({ docs: [] });
+  const groupMembersQuery = getDocs(collection(db, 'groups', gid, 'members'));
   const officialAttendanceQuery = state.role === 'leader'
     ? getDocs(query(collection(db, 'groups', gid, 'attendanceRecords'), where('lessonDate', '==', state.attendanceDate)))
     : Promise.resolve({ docs: [] });
@@ -273,7 +271,7 @@ async function loadWorkspace() {
     readQuery('Расписание', getDocs(lessonQuery)),
     readQuery('Личный прогресс', getDocs(progressQuery)),
     readQuery('Предварительная посещаемость', getDocs(attendanceQuery)),
-    readQuery('Список участников группы', leaderRosterQuery),
+    readQuery('Список участников группы', groupMembersQuery),
     readQuery('Официальная посещаемость', officialAttendanceQuery)
   ]);
 
@@ -1017,6 +1015,422 @@ async function deleteTask(taskId) {
   } catch (error) {
     console.error('STUDIUM: failed to delete task', error);
     notify(error.message || 'Не удалось удалить домашнее задание.', 'error');
+  } finally {
+    setBusy(false);
+  }
+}
+
+function renderManage() {
+  const members = state.groupMembers.slice().sort((a,b) =>
+    String(a.displayName || a.username || '').localeCompare(
+      String(b.displayName || b.username || ''), 'ru', { sensitivity: 'base' }
+    )
+  );
+  const leader = state.role === 'leader';
+  const code = state.activeMembership?.inviteCode || '';
+  const switcher = state.memberships.length > 1
+    ? '<label class="field-label group-switch-field">Переключить группу<select id="group-switch">' +
+      state.memberships.map(item => '<option value="' + esc(item.groupId) + '" ' +
+        (item.groupId === state.group.id ? 'selected' : '') + '>' + esc(item.name || 'Учебная группа') + '</option>').join('') +
+      '</select></label>'
+    : '';
+
+  const invite = leader
+    ? '<section class="group-invite-card"><div><p class="eyebrow">КОД ПРИГЛАШЕНИЯ</p>' +
+      '<h2>' + esc(code || 'Код не найден') + '</h2>' +
+      '<p class="muted">Отправь этот код студентам, чтобы они могли присоединиться к группе.</p></div>' +
+      (code ? '<button type="button" class="btn primary" data-action="copy-code">Скопировать код</button>' : '') +
+      '</section>'
+    : '<p class="muted group-student-note">Ты состоишь в этой учебной группе. Список участников доступен всем членам группы.</p>';
+
+  const rows = members.map((member,index) => {
+    const name = member.displayName || member.fullName || member.username || 'Участник';
+    const isLeader = member.role === 'leader';
+    const isCurrent = member.id === state.user.uid;
+    const initials = name.trim().split(/\s+/).slice(0,2).map(part => part[0] || '').join('').toUpperCase();
+    return '<article class="group-member-row">' +
+      '<span class="group-member-avatar">' + esc(initials || 'У') + '</span>' +
+      '<div class="group-member-name"><strong>' + esc(name) + (isCurrent ? ' <span class="group-you-label">Это вы</span>' : '') + '</strong>' +
+      '<small>' + (isLeader ? 'Староста' : 'Студент') + '</small></div>' +
+      (isLeader ? '<span class="group-member-role">Староста</span>' : '<span class="group-member-role student">Студент</span>') +
+      '</article>';
+  }).join('');
+
+  return heading('ПРОСТРАНСТВО ГРУППЫ', 'Наша группа', 'Информация об учебной группе и её участниках.') +
+    '<div class="group-overview">' +
+      '<section class="panel group-summary-card"><p class="eyebrow">УЧЕБНАЯ ГРУППА</p><h2>' + esc(state.group.name || 'Учебная группа') + '</h2>' +
+      '<p class="muted">' + members.length + ' ' + (members.length === 1 ? 'участник' : (members.length < 5 ? 'участника' : 'участников')) + '</p>' +
+      '<span class="role">' + (leader ? 'Ты — староста' : 'Ты — участник группы') + '</span></section>' +
+      invite + switcher +
+    '</div>' +
+    '<section class="group-members-section"><div class="group-members-heading"><div><p class="eyebrow">СОСТАВ ГРУППЫ</p><h2>Все участники</h2></div><span class="group-members-count">' + members.length + '</span></div>' +
+      (rows ? '<div class="group-members-list">' + rows + '</div>' : empty('Пока никого нет', 'Участники появятся в этом списке после присоединения к группе.')) +
+    '</section>' +
+    (leader ? '<section class="panel group-cycle-panel"><h2>Учебный цикл</h2><p class="muted">Укажи понедельник, с которого начинается первая учебная неделя.</p><form id="cycle-form" class="form"><label>Начало первой учебной недели<input name="studyCycleStart" type="date" value="' + esc(state.group.studyCycleStart || '') + '" required></label><button class="btn secondary">Сохранить учебный цикл</button></form></section>' : '');
+}
+
+async function submitAuth(form) {
+  const data = new FormData(form);
+  const username = normalizeUsername(data.get('username'));
+  const password = String(data.get('password') || '');
+
+  if (!validUsername(username)) {
+    notify('Логин: 3–24 символа, начни с буквы или цифры. Разрешены латинские буквы, цифры, точка, дефис и подчёркивание.', 'error');
+    return;
+  }
+
+  // The visible login is mapped to a deterministic internal Firebase email alias.
+  const authIdentifier = authEmailForUsername(username);
+  setBusy(true);
+  try {
+    if (data.has('full_name')) {
+      const fullName = String(data.get('full_name') || '').trim();
+      const patronymic = '';
+      const displayName = fullName;
+      const credential = await createUserWithEmailAndPassword(auth, authIdentifier, password);
+      await updateProfile(credential.user, { displayName });
+      const profileRef = doc(db, 'users', credential.user.uid);
+      const existingProfile = await getDoc(profileRef);
+      if (existingProfile.exists()) {
+        await updateDoc(profileRef, { fullName, patronymic, username, updatedAt: serverTimestamp() });
+      } else {
+        await setDoc(profileRef, {
+          fullName,
+          patronymic,
+          username,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+      }
+      state.profile = { fullName, patronymic, username };
+      await boot(credential.user);
+    } else {
+      const credential = await signInWithEmailAndPassword(auth, authIdentifier, password);
+      await boot(credential.user);
+    }
+  } catch (error) {
+    const message = error.code === 'auth/email-already-in-use' ? 'Этот логин уже занят. Выбери другой.' :
+      error.code === 'auth/invalid-credential' ? 'Неверный логин или пароль.' :
+      error.code === 'auth/weak-password' ? 'Пароль должен содержать не менее 8 символов.' :
+      error.code === 'auth/invalid-email' ? 'Проверь логин: используй латинские буквы, цифры, точку, дефис или подчёркивание.' :
+      error.message || 'Ошибка авторизации.';
+    notify(message, 'error');
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function createGroup(form) {
+  const name = String(new FormData(form).get('name') || '').trim();
+  setBusy(true);
+  try {
+    const groupRef = doc(collection(db, 'groups'));
+    const inviteCode = makeInviteCode();
+    const groupId = groupRef.id;
+    const userRef = doc(db, 'users', state.user.uid);
+    const memberRef = doc(db, 'groups', groupId, 'members', state.user.uid);
+    const userGroupRef = doc(db, 'users', state.user.uid, 'groups', groupId);
+    const inviteRef = doc(db, 'inviteCodes', inviteCode);
+    const cycleStart = mondayOf(new Date());
+
+    const batch = writeBatch(db);
+    batch.set(groupRef, {
+      name,
+      createdBy: state.user.uid,
+      studyCycleStart: cycleStart,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    batch.set(memberRef, {
+      userId: state.user.uid,
+      displayName: displayFullName(state.profile),
+      role: 'leader',
+      joinedAt: serverTimestamp()
+    });
+    batch.set(userGroupRef, {
+      groupId,
+      name,
+      role: 'leader',
+      inviteCode,
+      joinedAt: serverTimestamp()
+    });
+    batch.set(inviteRef, {
+      groupId,
+      groupName: name,
+      createdBy: state.user.uid,
+      createdAt: serverTimestamp()
+    });
+    await batch.commit();
+    await loadMemberships();
+    await selectGroup(groupId);
+  } catch (error) {
+    notify(error.message || 'Не удалось создать группу.', 'error');
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function joinGroup(form) {
+  const code = String(new FormData(form).get('code') || '').trim().toUpperCase();
+  setBusy(true);
+  try {
+    const inviteSnapshot = await getDoc(doc(db, 'inviteCodes', code));
+    if (!inviteSnapshot.exists()) throw new Error('Код приглашения не найден.');
+    const invite = inviteSnapshot.data();
+    const groupId = invite.groupId;
+    const memberRef = doc(db, 'groups', groupId, 'members', state.user.uid);
+    const existing = await getDoc(memberRef);
+    if (existing.exists()) {
+      await loadMemberships();
+      return selectGroup(groupId);
+    }
+
+    const batch = writeBatch(db);
+    batch.set(memberRef, {
+      userId: state.user.uid,
+      displayName: displayFullName(state.profile),
+      role: 'student',
+      inviteCodeUsed: code,
+      joinedAt: serverTimestamp()
+    });
+    batch.set(doc(db, 'users', state.user.uid, 'groups', groupId), {
+      groupId,
+      name: invite.groupName || 'Учебная группа',
+      role: 'student',
+      joinedAt: serverTimestamp()
+    });
+    await batch.commit();
+    await loadMemberships();
+    await selectGroup(groupId);
+  } catch (error) {
+    notify(error.message || 'Не удалось вступить в группу.', 'error');
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function submitTask(form) {
+  const values = Object.fromEntries(new FormData(form).entries());
+  const lesson = state.lessons.find(item => item.id === values.lessonId) ||
+    state.lessons.find(item => item.id === state.selectedScheduleLessonId);
+  if (!lesson) {
+    notify('Выбери пару из расписания.', 'error');
+    return;
+  }
+  const weekdayNames = ['','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'];
+  const lessonDate = nextLessonDate(lesson);
+  const payload = {
+    subject: lesson.subject,
+    lessonId: lesson.id,
+    weekday: Number(lesson.weekday),
+    weekNumber: Number(lesson.weekNumber),
+    lessonTime: lesson.startsAt || '',
+    lessonDate,
+    title: String(values.title || '').trim(),
+    description: String(values.description || '').trim()
+  };
+  if (!payload.title) {
+    notify('Укажи название домашнего задания.', 'error');
+    return;
+  }
+  setBusy(true);
+  try {
+    if (state.role === 'leader') {
+      await addDoc(groupCollection('tasks'), {
+        ...payload,
+        createdBy: state.user.uid,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        sourceSuggestionId: null
+      });
+      notify('Задание опубликовано.', 'success');
+    } else {
+      await addDoc(groupCollection('taskSuggestions'), {
+        ...payload,
+        submittedBy: state.user.uid,
+        status: 'pending',
+        createdAt: serverTimestamp()
+      });
+      notify('Предложение отправлено старосте.', 'success');
+    }
+    state.selectedScheduleLessonId = lesson.id;
+    await loadWorkspace();
+    renderWorkspace();
+    root.querySelector('#homework-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (error) {
+    notify(error.message || 'Не удалось сохранить задание.', 'error');
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function reviewSuggestion(suggestionId, approve) {
+  setBusy(true);
+  try {
+    const suggestionRef = groupDocument('taskSuggestions', suggestionId);
+    const taskRef = doc(groupCollection('tasks'));
+    await runTransaction(db, async transaction => {
+      const snapshot = await transaction.get(suggestionRef);
+      if (!snapshot.exists()) throw new Error('Предложение не найдено.');
+      const suggestion = snapshot.data();
+      if (suggestion.status !== 'pending') throw new Error('Предложение уже рассмотрено.');
+
+      if (approve) {
+        transaction.set(taskRef, {
+          subject: suggestion.subject || '',
+          title: suggestion.title,
+          description: suggestion.description || '',
+          lessonDate: suggestion.lessonDate || null,
+          lessonId: suggestion.lessonId || null,
+          weekday: suggestion.weekday || null,
+          weekNumber: suggestion.weekNumber || null,
+          lessonTime: suggestion.lessonTime || '',
+          createdBy: state.user.uid,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          sourceSuggestionId: suggestionId
+        });
+        transaction.update(suggestionRef, {
+          status: 'approved',
+          reviewedBy: state.user.uid,
+          reviewedAt: serverTimestamp(),
+          publishedTaskId: taskRef.id
+        });
+      } else {
+        transaction.update(suggestionRef, {
+          status: 'rejected',
+          reviewedBy: state.user.uid,
+          reviewedAt: serverTimestamp()
+        });
+      }
+    });
+    notify(approve ? 'Задание опубликовано для группы.' : 'Предложение отклонено.', 'success');
+    await loadWorkspace();
+    renderWorkspace();
+  } catch (error) {
+    notify(error.message || 'Не удалось обработать предложение.', 'error');
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function updateProgress(input) {
+  const taskId = input.dataset.progress;
+  const progressId = taskId + '_' + state.user.uid;
+  const progressRef = groupDocument('taskProgress', progressId);
+  const current = state.progress.get(taskId);
+  setBusy(true);
+  try {
+    await setDoc(progressRef, {
+      taskId,
+      userId: state.user.uid,
+      completed: input.checked,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+    state.progress.set(taskId, input.checked);
+    notify('Личный прогресс сохранён.', 'success');
+  } catch (error) {
+    input.checked = Boolean(current);
+    notify(error.message || 'Не удалось сохранить отметку.', 'error');
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function submitLesson(form) {
+  const values = Object.fromEntries(new FormData(form).entries());
+  const startIndex = Number(values.startPeriod);
+  const periodCount = Number(values.periodCount);
+  const weekNumber = Number(values.weekNumber);
+  const weekday = Number(values.weekday);
+  if (!Number.isInteger(startIndex) || !Number.isInteger(periodCount) ||
+      startIndex < 0 || periodCount < 1 || periodCount > 3 ||
+      startIndex + periodCount > schedulePeriods.length ||
+      ![1,2].includes(weekNumber) || weekday < 1 || weekday > 6) {
+    notify('Проверь выбранное время и продолжительность пары.', 'error');
+    return;
+  }
+  const endIndex = startIndex + periodCount;
+  const overlaps = state.lessons.some(item => {
+    if (Number(item.weekNumber) !== weekNumber || Number(item.weekday) !== weekday) return false;
+    const existingStart = lessonStartIndex(item);
+    if (existingStart < 0) return false;
+    const existingEnd = existingStart + lessonSpan(item, existingStart);
+    return startIndex < existingEnd && existingStart < endIndex;
+  });
+  if (overlaps) {
+    notify('Это время пересекается с уже добавленной парой.', 'error');
+    return;
+  }
+  const startPeriod = schedulePeriods[startIndex];
+  const endPeriod = schedulePeriods[endIndex - 1];
+  setBusy(true);
+  try {
+    await addDoc(groupCollection('lessons'), {
+      subject: String(values.subject || '').trim(),
+      weekday,
+      weekNumber,
+      startsAt: startPeriod.start,
+      endsAt: endPeriod.end,
+      periodCount,
+      room: String(values.room || '').trim(),
+      description: String(values.description || '').trim(),
+      createdBy: state.user.uid,
+      createdAt: serverTimestamp()
+    });
+    state.scheduleEditorSlot = null;
+    notify('Пара добавлена в расписание.', 'success');
+    await loadWorkspace();
+    renderWorkspace();
+  } catch (error) {
+    notify(error.message || 'Не удалось добавить пару.', 'error');
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function deleteLesson(lessonId) {
+  if (state.role !== 'leader') {
+    notify('Удалять пары может только староста.', 'error');
+    return;
+  }
+  const lesson = state.lessons.find(item => item.id === lessonId);
+  if (!lesson) {
+    notify('Пара уже отсутствует в расписании.', 'error');
+    return;
+  }
+  const label = [lesson.subject, lesson.startsAt].filter(Boolean).join(' · ');
+  const confirmed = window.confirm(
+    'Удалить пару «' + label + '»?\n\nСвязанные предварительные ответы и официальные отметки посещаемости также будут удалены.'
+  );
+  if (!confirmed) return;
+
+  setBusy(true);
+  try {
+    const [responses, records] = await Promise.all([
+      getDocs(query(collection(db, 'groups', state.group.id, 'attendanceResponses'), where('lessonId', '==', lessonId))),
+      getDocs(query(collection(db, 'groups', state.group.id, 'attendanceRecords'), where('lessonId', '==', lessonId)))
+    ]);
+    const refs = [
+      ...responses.docs.map(item => item.ref),
+      ...records.docs.map(item => item.ref),
+      groupDocument('lessons', lessonId)
+    ];
+
+    // Keep each Firestore batch comfortably below the 500-write limit.
+    for (let offset = 0; offset < refs.length; offset += 450) {
+      const batch = writeBatch(db);
+      refs.slice(offset, offset + 450).forEach(ref => batch.delete(ref));
+      await batch.commit();
+    }
+
+    if (state.selectedScheduleLessonId === lessonId) state.selectedScheduleLessonId = null;
+    notify('Пара и связанные отметки удалены.', 'success');
+    await loadWorkspace();
+    renderWorkspace();
+  } catch (error) {
+    console.error('STUDIUM delete lesson failed:', error);
+    notify(error.message || 'Не удалось удалить пару. Проверь правила Firestore.', 'error');
   } finally {
     setBusy(false);
   }
