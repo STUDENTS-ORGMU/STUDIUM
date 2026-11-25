@@ -26,7 +26,7 @@ jobs:
       - name: Build app
         run: npm run build
         env:
-          VITE_FIREBASE_API_KEY: 'AIzaSyCO2fAyU8AerjaRpb602dVhK5rJbJ1ISMw'
+          VITE_FIREBASE_API_KEY: 'AIzaSyCO2fAyU8AerjaRpb602fVhK5rJbJ1ISMw'
           VITE_FIREBASE_AUTH_DOMAIN: 'studium-99b06.firebaseapp.com'
           VITE_FIREBASE_PROJECT_ID: 'studium-99b06'
           VITE_FIREBASE_STORAGE_BUCKET: 'studium-99b06.firebasestorage.app'
