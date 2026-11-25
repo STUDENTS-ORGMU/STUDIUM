@@ -189,7 +189,8 @@ service cloud.firestore {
           && request.resource.data.taskId == resource.data.taskId
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['completed', 'updatedAt'])
           && request.resource.data.completed is bool;
-        allow delete: if isMember(groupId) && resource.data.userId == request.auth.uid;
+        allow delete: if isMember(groupId)
+          && (resource.data.userId == request.auth.uid || isLeader(groupId));
       }
 
       match /lessons/{lessonId} {
