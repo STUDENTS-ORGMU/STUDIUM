@@ -11,6 +11,7 @@ import {
   addDoc,
   collection,
   doc,
+  deleteDoc,
   getDoc,
   getDocs,
   orderBy,
@@ -72,6 +73,9 @@ const state = {
   lessons: [],
   progress: new Map(),
   attendance: [],
+  attendanceRecords: [],
+  groupMembers: [],
+  selectedAttendanceLessonId: null,
   attendanceDate: today(),
   scheduleEditorSlot: null,
   selectedScheduleLessonId: null,
@@ -247,6 +251,13 @@ async function loadWorkspace() {
   if (state.role !== 'leader') attendanceConstraints.push(where('userId', '==', state.user.uid));
   const attendanceQuery = query(attendanceRef, ...attendanceConstraints);
 
+  const leaderRosterQuery = state.role === 'leader'
+    ? getDocs(collection(db, 'groups', gid, 'members'))
+    : Promise.resolve({ docs: [] });
+  const officialAttendanceQuery = state.role === 'leader'
+    ? getDocs(query(collection(db, 'groups', gid, 'attendanceRecords'), where('lessonDate', '==', state.attendanceDate)))
+    : Promise.resolve({ docs: [] });
+
   const readQuery = async (label, promise) => {
     try {
       return await promise;
@@ -256,12 +267,14 @@ async function loadWorkspace() {
       throw error;
     }
   };
-  const [tasks, suggestions, lessons, progress, attendance] = await Promise.all([
+  const [tasks, suggestions, lessons, progress, attendance, members, attendanceRecords] = await Promise.all([
     readQuery('Домашние задания', getDocs(taskQuery)),
     readQuery('Предложения ДЗ', getDocs(suggestionQuery)),
     readQuery('Расписание', getDocs(lessonQuery)),
     readQuery('Личный прогресс', getDocs(progressQuery)),
-    readQuery('Предварительная посещаемость', getDocs(attendanceQuery))
+    readQuery('Предварительная посещаемость', getDocs(attendanceQuery)),
+    readQuery('Список участников группы', leaderRosterQuery),
+    readQuery('Официальная посещаемость', officialAttendanceQuery)
   ]);
 
   state.tasks = tasks.docs.map(item => ({ id: item.id, ...item.data() }))
@@ -270,6 +283,8 @@ async function loadWorkspace() {
   state.lessons = lessons.docs.map(item => ({ id: item.id, ...item.data() }));
   state.progress = new Map(progress.docs.map(item => [item.data().taskId, item.data().completed === true]));
   state.attendance = attendance.docs.map(item => ({ id: item.id, ...item.data() }));
+  state.groupMembers = members.docs.map(item => ({ id: item.id, ...item.data() }));
+  state.attendanceRecords = attendanceRecords.docs.map(item => ({ id: item.id, ...item.data() }));
 }
 
 function navButton(tab, icon, title) {
@@ -608,22 +623,103 @@ function nextLessonDate(lesson) {
   return toISO(candidate);
 }
 
+function attendanceResponseLabel(response) {
+  if (response === 'will_attend') return '<span class="attendance-response will-attend">Будет</span>';
+  if (response === 'will_miss') return '<span class="attendance-response will-miss">Не будет</span>';
+  return '<span class="attendance-response no-response">Не ответил</span>';
+}
+
+function attendanceStatusLabel(status) {
+  return ({
+    present: 'Присутствовал',
+    absent: 'Отсутствовал',
+    late: 'Опоздал',
+    excused: 'Уважительная причина'
+  })[status] || 'Не отмечен';
+}
+
+function renderAttendanceRoster(lesson) {
+  const members = state.groupMembers.slice().sort((a,b) =>
+    String(a.displayName || a.fullName || a.username || '').localeCompare(
+      String(b.displayName || b.fullName || b.username || ''), 'ru', { sensitivity: 'base' }
+    )
+  );
+  const responses = new Map(state.attendance
+    .filter(item => item.lessonId === lesson.id && item.lessonDate === state.attendanceDate)
+    .map(item => [item.userId, item]));
+  const records = new Map(state.attendanceRecords
+    .filter(item => item.lessonId === lesson.id && item.lessonDate === state.attendanceDate)
+    .map(item => [item.studentId, item]));
+  const missed = members.filter(member => responses.get(member.id)?.response === 'will_miss');
+  const presentResponses = members.filter(member => responses.get(member.id)?.response === 'will_attend').length;
+  const notAnswered = members.length - presentResponses - missed.length;
+  const bulkButton = missed.length
+    ? '<button class="btn primary" type="button" data-action="excuse-all-missed" data-lesson="' + esc(lesson.id) + '">Поставить «Уважительная причина» всем (' + missed.length + ')</button>'
+    : '';
+
+  const rows = members.map((member, index) => {
+    const userId = member.id || member.userId;
+    const name = member.displayName || member.fullName || member.username || 'Участник';
+    const response = responses.get(userId)?.response || '';
+    const official = records.get(userId);
+    const status = official?.status || '';
+    const role = member.role === 'leader' ? '<span class="roster-role">Староста</span>' : '';
+    const excuseButton = response === 'will_miss' && status !== 'excused'
+      ? '<button type="button" class="roster-excuse-btn" data-action="excuse-student" data-student="' + esc(userId) + '" data-lesson="' + esc(lesson.id) + '">Уважительная причина</button>'
+      : '';
+    return '<article class="attendance-roster-row">' +
+      '<div class="roster-person"><span class="roster-number">' + (index + 1) + '</span><div><strong>' + esc(name) + '</strong>' + role + '</div></div>' +
+      '<div class="roster-response">' + attendanceResponseLabel(response) + '</div>' +
+      '<div class="roster-official"><label><span>Отметка старосты</span><select data-attendance-status data-student="' + esc(userId) + '" data-lesson="' + esc(lesson.id) + '">' +
+        '<option value="" ' + (!status ? 'selected' : '') + '>Не отмечен</option>' +
+        '<option value="present" ' + (status === 'present' ? 'selected' : '') + '>Присутствовал</option>' +
+        '<option value="absent" ' + (status === 'absent' ? 'selected' : '') + '>Отсутствовал</option>' +
+        '<option value="late" ' + (status === 'late' ? 'selected' : '') + '>Опоздал</option>' +
+        '<option value="excused" ' + (status === 'excused' ? 'selected' : '') + '>Уважительная причина</option>' +
+      '</select></label>' + excuseButton + '</div>' +
+    '</article>';
+  }).join('');
+
+  return '<section class="attendance-register"><div class="attendance-register-head"><div><p class="eyebrow">ОФИЦИАЛЬНЫЙ ЖУРНАЛ</p><h2>Список группы</h2><p class="muted">Участники отсортированы по алфавиту, включая старосту.</p></div>' + bulkButton + '</div>' +
+    '<div class="attendance-summary"><span>Будут: <b>' + presentResponses + '</b></span><span>Не будут: <b>' + missed.length + '</b></span><span>Без ответа: <b>' + notAnswered + '</b></span><span>Всего: <b>' + members.length + '</b></span></div>' +
+    (rows ? '<div class="attendance-roster">' + rows + '</div>' : empty('В группе пока нет участников', 'Когда студенты вступят в группу, они появятся здесь.')) +
+    '<p class="muted small">«Будет / Не будет» — предварительный ответ студента. Отметка справа — официальный журнал старосты.</p></section>';
+}
+
 function renderAttendance() {
   const date = state.attendanceDate;
   const [y,m,d] = date.split('-').map(Number);
   const weekday = ((new Date(Date.UTC(y,m-1,d)).getUTCDay()+6)%7)+1;
   const week = lessonWeekFor(date);
-  const lessons = state.lessons.filter(item => item.weekday === weekday && item.weekNumber === week);
+  const lessons = state.lessons.filter(item => Number(item.weekday) === weekday && Number(item.weekNumber) === week)
+    .sort((a,b) => String(a.startsAt).localeCompare(String(b.startsAt)));
   const ownResponses = new Map(state.attendance.filter(item => item.userId === state.user.uid).map(item => [item.lessonId, item.response]));
-  return heading('ПОСЕЩАЕМОСТЬ', 'Предварительная явка', 'Отметь, планируешь ли ты быть на паре. Это не официальная отметка посещения.') +
+  const selected = lessons.find(item => item.id === state.selectedAttendanceLessonId) || null;
+  const leaderLessonCards = lessons.map(item => {
+    const responses = state.attendance.filter(response => response.lessonId === item.id);
+    const attending = responses.filter(response => response.response === 'will_attend').length;
+    const missing = responses.filter(response => response.response === 'will_miss').length;
+    const selectedClass = selected?.id === item.id ? ' selected' : '';
+    return '<button type="button" class="attendance-lesson-card' + selectedClass + '" data-attendance-lesson="' + esc(item.id) + '">' +
+      '<span>' + esc(item.startsAt) + (item.endsAt ? '–' + esc(item.endsAt) : '') + '</span><strong>' + esc(item.subject) + '</strong>' +
+      '<small>' + (state.role === 'leader' ? 'Будут: ' + attending + ' · Не будут: ' + missing : 'Выбери пару для ответа') + '</small></button>';
+  }).join('');
+
+  const studentResponsePanel = state.role !== 'leader' && selected
+    ? '<section class="student-attendance-response panel"><p class="eyebrow">ТВОЙ ОТВЕТ</p><h2>' + esc(selected.subject) + '</h2><p class="muted">Сообщи старосте, планируешь ли ты быть на этой паре.</p><div class="actions">' +
+      '<button class="btn ' + (ownResponses.get(selected.id) === 'will_attend' ? 'primary' : 'secondary') + '" data-attendance="will_attend" data-lesson="' + esc(selected.id) + '">Буду</button>' +
+      '<button class="btn ' + (ownResponses.get(selected.id) === 'will_miss' ? 'primary' : 'secondary') + '" data-attendance="will_miss" data-lesson="' + esc(selected.id) + '">Не буду</button>' +
+      '</div></section>'
+    : '';
+
+  return heading('ПОСЕЩАЕМОСТЬ', state.role === 'leader' ? 'Посещаемость группы' : 'Моя посещаемость',
+      state.role === 'leader' ? 'Выбери дату и пару, чтобы открыть алфавитный список группы.' : 'Выбери пару и отметь, планируешь ли ты присутствовать.') +
     '<div class="date-picker"><label>Дата<input type="date" id="attendance-date" value="' + date + '"></label><span>' + (week === 1 ? 'Первая' : 'Вторая') + ' учебная неделя</span></div>' +
-    (lessons.length ? '<div class="attendance">' + lessons.map(item => {
-      const responses = state.attendance.filter(response => response.lessonId === item.id);
-      const attending = responses.filter(response => response.response === 'will_attend').length;
-      const missing = responses.filter(response => response.response === 'will_miss').length;
-      return '<article class="lesson attendance-item"><div><small>' + esc(item.startsAt) + (item.endsAt ? '–' + esc(item.endsAt) : '') + '</small><strong>' + esc(item.subject) + '</strong><p>' + esc(item.room || 'Аудитория не указана') + (state.role === 'leader' ? ' · Будут: ' + attending + ' · Не будут: ' + missing : '') + '</p></div><div class="actions"><button class="btn ' + (ownResponses.get(item.id) === 'will_attend' ? 'primary' : 'secondary') + '" data-attendance="will_attend" data-lesson="' + esc(item.id) + '">Буду</button><button class="btn ' + (ownResponses.get(item.id) === 'will_miss' ? 'primary' : 'secondary') + '" data-attendance="will_miss" data-lesson="' + esc(item.id) + '">Не буду</button></div></article>';
-    }).join('') + '</div>' : empty('На эту дату пар нет', 'Выбери другую дату или проверь расписание группы.')) +
-    '<p class="muted small">Староста видит предварительные ответы участников. Фактическая посещаемость хранится отдельно.</p>';
+    (lessons.length ? '<div class="attendance-lesson-grid">' + leaderLessonCards + '</div>' : empty('На эту дату пар нет', 'Выбери другую дату или проверь расписание группы.')) +
+    (selected && state.role === 'leader' ? renderAttendanceRoster(selected) : '') +
+    studentResponsePanel +
+    (state.role === 'leader' && !selected ? '<p class="muted small">Нажми на карточку пары выше — откроется список всех студентов и старосты по алфавиту.</p>' : '') +
+    '<p class="muted small">Предварительный ответ студента и официальная отметка посещаемости ведутся отдельно.</p>';
 }
 
 function renderManage() {
@@ -659,6 +755,14 @@ function bindEvents() {
       root.querySelector('#homework-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
     }
+    if (button.dataset.attendanceLesson) {
+      state.selectedAttendanceLessonId = button.dataset.attendanceLesson;
+      renderWorkspace();
+      root.querySelector('.attendance-register, .student-attendance-response')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      return;
+    }
+    if (button.dataset.action === 'excuse-all-missed') return excuseMissedStudents(button.dataset.lesson);
+    if (button.dataset.action === 'excuse-student') return excuseMissedStudents(button.dataset.lesson, button.dataset.student);
     if (button.dataset.action === 'open-lesson-cell') {
       state.scheduleEditorSlot = {
         weekNumber: Number(button.dataset.week),
@@ -698,8 +802,12 @@ function bindEvents() {
 
   root.addEventListener('change', async event => {
     if (event.target.matches('[data-progress]')) return updateProgress(event.target);
+    if (event.target.matches('[data-attendance-status]')) {
+      return saveOfficialAttendance(event.target.dataset.student, event.target.dataset.lesson, event.target.value);
+    }
     if (event.target.id === 'attendance-date' && event.target.value) {
       state.attendanceDate = event.target.value;
+      state.selectedAttendanceLessonId = null;
       try { await loadWorkspace(); renderWorkspace(); }
       catch (error) { notify(error.message, 'error'); }
     }
@@ -1094,6 +1202,86 @@ async function saveAttendance(lessonId, response) {
     renderWorkspace();
   } catch (error) {
     notify(error.message || 'Не удалось сохранить ответ.', 'error');
+  } finally {
+    setBusy(false);
+  }
+}
+
+function attendanceRecordRef(lessonId, studentId) {
+  const recordId = lessonId + '_' + state.attendanceDate + '_' + studentId;
+  return doc(db, 'groups', state.group.id, 'attendanceRecords', recordId);
+}
+
+async function saveOfficialAttendance(studentId, lessonId, status) {
+  if (state.role !== 'leader') return;
+  const ref = attendanceRecordRef(lessonId, studentId);
+  setBusy(true);
+  try {
+    if (!status) {
+      await deleteDoc(ref);
+      notify('Официальная отметка очищена.', 'success');
+    } else {
+      await setDoc(ref, {
+        studentId,
+        lessonId,
+        lessonDate: state.attendanceDate,
+        status,
+        reason: status === 'excused' ? 'Уважительная причина' : '',
+        markedBy: state.user.uid,
+        markedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      notify('Отметка посещаемости сохранена.', 'success');
+    }
+    await loadWorkspace();
+    renderWorkspace();
+  } catch (error) {
+    notify(error.message || 'Не удалось сохранить официальную отметку.', 'error');
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function excuseMissedStudents(lessonId, onlyStudentId = null) {
+  if (state.role !== 'leader') return;
+  const missing = state.attendance.filter(item =>
+    item.lessonId === lessonId &&
+    item.lessonDate === state.attendanceDate &&
+    item.response === 'will_miss' &&
+    (!onlyStudentId || item.userId === onlyStudentId)
+  );
+  if (!missing.length) {
+    notify('Нет студентов с ответом «Не буду».');
+    return;
+  }
+  const title = onlyStudentId
+    ? 'Поставить этому студенту «Уважительная причина»?'
+    : 'Поставить «Уважительная причина» всем ' + missing.length + ' студентам, ответившим «Не буду»?';
+  if (!window.confirm(title)) return;
+
+  setBusy(true);
+  try {
+    for (let offset = 0; offset < missing.length; offset += 450) {
+      const batch = writeBatch(db);
+      missing.slice(offset, offset + 450).forEach(item => {
+        batch.set(attendanceRecordRef(lessonId, item.userId), {
+          studentId: item.userId,
+          lessonId,
+          lessonDate: state.attendanceDate,
+          status: 'excused',
+          reason: 'Уважительная причина — предварительный ответ «Не буду»',
+          markedBy: state.user.uid,
+          markedAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+      });
+      await batch.commit();
+    }
+    notify('Уважительная причина отмечена.', 'success');
+    await loadWorkspace();
+    renderWorkspace();
+  } catch (error) {
+    notify(error.message || 'Не удалось обновить посещаемость.', 'error');
   } finally {
     setBusy(false);
   }
