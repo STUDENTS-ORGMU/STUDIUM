@@ -1,6 +1,6 @@
 # STUDIUM
 
-STUDIUM — отдельная платформа для учебных групп. Проект создаётся с нуля на Vite, Vanilla JavaScript и Supabase. Репозитории `study-journal` и `yavka` остаются независимыми и не изменяются.
+STUDIUM — отдельная платформа для учебных групп. Проект создаётся с нуля на Vite, Vanilla JavaScript и Supabase. 
 
 ## Возможности текущего MVP
 
