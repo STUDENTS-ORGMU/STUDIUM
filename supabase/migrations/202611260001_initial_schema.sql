@@ -81,9 +81,7 @@ create policy "user joins as self" on public.group_members for insert to authent
 -- Do not grant table SELECT on invite_codes: expose only exact-code lookup via RPC.
 drop policy if exists "authenticated exact invite lookup" on public.invite_codes;
 create or replace function public.lookup_invite_code(p_code text)
-returns text language sql stable security definer set search_path=public as $
- select group_id from public.invite_codes where code=p_code limit 1;
-$;
+returns text language sql stable security definer set search_path=public as 'select group_id from public.invite_codes where code = p_code limit 1';
 revoke all on function public.lookup_invite_code(text) from public;
 grant execute on function public.lookup_invite_code(text) to authenticated;
 drop policy if exists "leader manages invite codes" on public.invite_codes;
