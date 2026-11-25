@@ -1421,10 +1421,32 @@ async function saveAttendance(lessonId, response, partKey = null) {
     });
     if (error) throw error;
 
-    // A student's answer is a preliminary response, not an official register mark.
-    // Only the group leader may edit attendanceRecords.
-    await loadWorkspace();
+    // Update the local view immediately after the server confirms the write.
+    // Keep the same ID format used by attendanceDocumentId() and the register.
+    const responseId = attendanceDocumentId(lessonId, state.user.uid, partKey);
+    const savedResponse = {
+      id: responseId,
+      lessonId,
+      userId: state.user.uid,
+      lessonDate: state.attendanceDate,
+      ...(partKey ? { partKey } : {}),
+      response,
+      updatedAt: new Date().toISOString()
+    };
+    state.attendance = [
+      ...state.attendance.filter(item => item.id !== responseId),
+      savedResponse
+    ];
     renderWorkspace();
+
+    // Refresh from Supabase as a consistency check; the confirmed local state
+    // remains visible even if a subsequent read is delayed.
+    try {
+      await loadWorkspace();
+      renderWorkspace();
+    } catch (refreshError) {
+      console.error('STUDIUM attendance refresh failed:', refreshError);
+    }
     notify(response === 'will_attend' ? 'Ответ сохранён: будешь на занятии.' : 'Ответ сохранён: не будешь на занятии.', 'success');
   } catch (error) {
     console.error('STUDIUM attendance response save failed:', error);
@@ -1458,8 +1480,32 @@ async function saveAttendanceForAll(response) {
     const failed = results.find(result => result.error);
     if (failed?.error) throw failed.error;
 
-    await loadWorkspace();
+    const savedAt = new Date().toISOString();
+    const savedRows = entries.map(({lesson,part}) => {
+      const id = attendanceDocumentId(lesson.id, state.user.uid, part.partKey);
+      return {
+        id,
+        lessonId: lesson.id,
+        userId: state.user.uid,
+        lessonDate: state.attendanceDate,
+        ...(part.partKey ? { partKey: part.partKey } : {}),
+        response,
+        updatedAt: savedAt
+      };
+    });
+    const savedIds = new Set(savedRows.map(item => item.id));
+    state.attendance = [
+      ...state.attendance.filter(item => !savedIds.has(item.id)),
+      ...savedRows
+    ];
     renderWorkspace();
+
+    try {
+      await loadWorkspace();
+      renderWorkspace();
+    } catch (refreshError) {
+      console.error('STUDIUM bulk attendance refresh failed:', refreshError);
+    }
     notify(response === 'will_attend'
       ? 'Ответ сохранён для всех пар и частей.'
       : 'Ответ сохранён для всех пар и частей.');
