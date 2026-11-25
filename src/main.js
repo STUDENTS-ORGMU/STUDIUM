@@ -763,7 +763,35 @@ async function saveAttendance(lessonId, response) {
       response,
       updatedAt: serverTimestamp()
     }, { merge: true });
-    notify('Предварительный ответ сохранён.', 'success');
+
+    // The student's answer initializes the official mark. A leader's manual
+    // correction is protected by the Firestore rule and will never be replaced.
+    let autoMarked = true;
+    try {
+      const status = response === 'will_attend' ? 'present' : 'absent';
+      await setDoc(attendanceRecordRef(lessonId, state.user.uid), {
+        studentId: state.user.uid,
+        lessonId,
+        lessonDate: state.attendanceDate,
+        status,
+        reason: 'Автоматическая отметка по ответу студента',
+        source: 'student_response',
+        source: 'leader',
+        markedBy: state.user.uid,
+        markedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    } catch (markError) {
+      if (markError.code !== 'permission-denied') throw markError;
+      autoMarked = false;
+    }
+
+    notify(
+      autoMarked
+        ? (response === 'will_attend' ? 'Ответ сохранён. В журнале автоматически отмечено «Был».' : 'Ответ сохранён. В журнале автоматически отмечено «Неуваж.» — староста может изменить отметку.')
+        : 'Ответ сохранён. Официальная отметка не изменена, потому что её уже вручную выставил староста.',
+      'success'
+    );
     await loadWorkspace();
     renderWorkspace();
   } catch (error) {
@@ -794,7 +822,35 @@ async function saveAttendanceForAll(response) {
       }, { merge: true });
     });
     await batch.commit();
-    notify(response === 'will_attend' ? 'Отмечено: буду на всех парах.' : 'Отмечено: не буду на всех парах.', 'success');
+
+    let automaticCount = 0;
+    let protectedCount = 0;
+    await Promise.all(lessons.map(async lesson => {
+      try {
+        await setDoc(attendanceRecordRef(lesson.id, state.user.uid), {
+          studentId: state.user.uid,
+          lessonId: lesson.id,
+          lessonDate: state.attendanceDate,
+          status: response === 'will_attend' ? 'present' : 'absent',
+          reason: 'Автоматическая отметка по ответу студента',
+          source: 'student_response',
+          markedBy: state.user.uid,
+          markedAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+        automaticCount += 1;
+      } catch (markError) {
+        if (markError.code !== 'permission-denied') throw markError;
+        protectedCount += 1;
+      }
+    }));
+
+    const label = response === 'will_attend' ? 'Буду на всех парах' : 'Не буду на всех парах';
+    notify(
+      label + '. Автоматически выставлено отметок: ' + automaticCount +
+      (protectedCount ? '. Ещё ' + protectedCount + ' отметок старосты оставлены без изменений.' : '.'),
+      'success'
+    );
     await loadWorkspace();
     renderWorkspace();
   } catch (error) {
@@ -867,6 +923,7 @@ async function excuseMissedStudents(lessonId, onlyStudentId = null) {
           lessonDate: state.attendanceDate,
           status: 'excused',
           reason: 'Уважительная причина — предварительный ответ «Не буду»',
+          source: 'leader',
           markedBy: state.user.uid,
           markedAt: serverTimestamp(),
           updatedAt: serverTimestamp()
