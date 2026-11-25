@@ -247,7 +247,7 @@ service cloud.firestore {
           && request.resource.data.lessonId == resource.data.lessonId
           && request.resource.data.lessonDate == resource.data.lessonDate
           && request.resource.data.response in ['will_attend', 'will_miss'];
-        allow delete: if isMember(groupId) && resource.data.userId == request.auth.uid;
+        allow delete: if isLeader(groupId) || (isMember(groupId) && resource.data.userId == request.auth.uid);
       }
 
       match /attendanceRecords/{recordId} {
