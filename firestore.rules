@@ -263,19 +263,25 @@ service cloud.firestore {
           && request.resource.data.lessonId is string
           && request.resource.data.lessonDate is string
           && request.resource.data.response in ['will_attend', 'will_miss']
+          && (!('partKey' in request.resource.data)
+            || request.resource.data.partKey in ['part1', 'part2', 'part3'])
           && exists(/databases/$(database)/documents/groups/$(groupId)/lessons/$(request.resource.data.lessonId));
         allow update: if isMember(groupId)
           && resource.data.userId == request.auth.uid
           && request.resource.data.userId == request.auth.uid
           && request.resource.data.lessonId == resource.data.lessonId
           && request.resource.data.lessonDate == resource.data.lessonDate
-          && request.resource.data.response in ['will_attend', 'will_miss'];
+          && request.resource.data.response in ['will_attend', 'will_miss']
+          && ((!('partKey' in resource.data) && !('partKey' in request.resource.data))
+            || (('partKey' in resource.data) && request.resource.data.partKey == resource.data.partKey));
         allow delete: if isLeader(groupId) || (isMember(groupId) && resource.data.userId == request.auth.uid);
       }
 
       match /attendanceRecords/{recordId} {
         function ownResponsePath() {
-          return /databases/$(database)/documents/groups/$(groupId)/attendanceResponses/$(request.resource.data.lessonId + '_' + request.resource.data.lessonDate + '_' + request.auth.uid);
+          return ('partKey' in request.resource.data)
+            ? /databases/$(database)/documents/groups/$(groupId)/attendanceResponses/$(request.resource.data.lessonId + '_' + request.resource.data.lessonDate + '_' + request.resource.data.partKey + '_' + request.auth.uid)
+            : /databases/$(database)/documents/groups/$(groupId)/attendanceResponses/$(request.resource.data.lessonId + '_' + request.resource.data.lessonDate + '_' + request.auth.uid);
         }
 
         function isMatchingStudentResponse() {
@@ -286,10 +292,15 @@ service cloud.firestore {
             && request.resource.data.lessonId is string
             && request.resource.data.lessonDate is string
             && request.resource.data.status in ['present', 'absent']
+            && (!('partKey' in request.resource.data)
+              || request.resource.data.partKey in ['part1', 'part2', 'part3'])
             && exists(ownResponsePath())
             && get(ownResponsePath()).data.userId == request.auth.uid
             && get(ownResponsePath()).data.lessonId == request.resource.data.lessonId
             && get(ownResponsePath()).data.lessonDate == request.resource.data.lessonDate
+            && (('partKey' in request.resource.data)
+              ? get(ownResponsePath()).data.partKey == request.resource.data.partKey
+              : !('partKey' in get(ownResponsePath()).data))
             && request.resource.data.status == (
               get(ownResponsePath()).data.response == 'will_attend' ? 'present' : 'absent'
             );
@@ -302,7 +313,9 @@ service cloud.firestore {
           && request.resource.data.studentId is string
           && exists(/databases/$(database)/documents/groups/$(groupId)/members/$(request.resource.data.studentId))
           && exists(/databases/$(database)/documents/groups/$(groupId)/lessons/$(request.resource.data.lessonId))
-          && request.resource.data.status in ['present', 'absent', 'late', 'excused']
+          && request.resource.data.status in ['present', 'absent', 'late', 'excused', 'unmarked']
+          && (!('partKey' in request.resource.data)
+            || request.resource.data.partKey in ['part1', 'part2', 'part3'])
         ) || isMatchingStudentResponse();
         allow update: if (
           isLeader(groupId)
@@ -310,14 +323,18 @@ service cloud.firestore {
           && request.resource.data.studentId == resource.data.studentId
           && request.resource.data.lessonId == resource.data.lessonId
           && request.resource.data.lessonDate == resource.data.lessonDate
-          && request.resource.data.status in ['present', 'absent', 'late', 'excused']
+          && request.resource.data.status in ['present', 'absent', 'late', 'excused', 'unmarked']
           && request.resource.data.source == 'leader'
+          && ((!('partKey' in resource.data) && !('partKey' in request.resource.data))
+            || (('partKey' in resource.data) && request.resource.data.partKey == resource.data.partKey))
         ) || (
           resource.data.source == 'student_response'
           && resource.data.studentId == request.auth.uid
           && request.resource.data.studentId == request.auth.uid
           && request.resource.data.lessonId == resource.data.lessonId
           && request.resource.data.lessonDate == resource.data.lessonDate
+          && ((!('partKey' in resource.data) && !('partKey' in request.resource.data))
+            || (('partKey' in resource.data) && request.resource.data.partKey == resource.data.partKey))
           && isMatchingStudentResponse()
         );
         allow delete: if isLeader(groupId);
