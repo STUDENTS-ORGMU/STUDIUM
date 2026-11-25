@@ -363,7 +363,11 @@ function taskForm(lesson) {
 function renderTodoPanel() {
   const selectedLesson = state.lessons.find(item => item.id === state.selectedScheduleLessonId) || null;
   const visibleTasks = selectedLesson
-    ? state.tasks.filter(item => item.lessonId === selectedLesson.id)
+    ? state.tasks.filter(item =>
+        item.lessonId === selectedLesson.id ||
+        (!item.lessonId && item.subject === selectedLesson.subject &&
+          item.lessonDate === nextLessonDate(selectedLesson))
+      )
     : state.tasks;
   const selectedName = selectedLesson
     ? 'TODO · ' + selectedLesson.subject
