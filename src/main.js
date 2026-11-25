@@ -1,28 +1,16 @@
 import './style.css';
 import { downloadAttendanceReport } from './attendance-report.js';
 import { supabase, supabaseConfigured } from './supabase.js';
-import { db } from './firebase.js';
+
 import { signUpWithUsername, signInWithUsername, signOutFromSupabase, getCurrentSupabaseProfile } from './supabase-auth.js';
 
 import {
   addDoc,
   collection,
-  doc,
-  deleteDoc,
-  getDoc,
-  getDocs,
-  onSnapshot,
-  orderBy,
-  query,
-  runTransaction,
-  serverTimestamp,
-  setDoc,
-  updateDoc,
-  where,
-  writeBatch
-} from 'firebase/firestore';
-
-const root = document.querySelector('#app');
+  import {
+  db, addDoc, collection, doc, deleteDoc, getDoc, getDocs, onSnapshot,
+  orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc, where, writeBatch
+} from './supabase-data.js';or('#app');
 const normalizeUsername = value => String(value ?? '').trim().toLowerCase();
 const validUsername = value => /^[a-z0-9][a-z0-9._-]{2,23}$/.test(value);
 
@@ -402,7 +390,7 @@ async function loadWorkspace() {
     try {
       return await promise;
     } catch (error) {
-      console.error('STUDIUM Firestore query failed:', label, error);
+      console.error('STUDIUM Supabase query failed:', label, error);
       error.message = label + ': ' + error.message;
       throw error;
     }
@@ -647,7 +635,7 @@ async function addGroupMaterialLink(form) {
     renderWorkspace();
   } catch (error) {
     console.error('STUDIUM material link save failed:', error);
-    notify(error.message || 'Не удалось сохранить ссылку. Проверь правила Firestore.', 'error');
+    notify(error.message || 'Не удалось сохранить ссылку. Проверь права доступа Supabase.', 'error');
   } finally {
     setBusy(false);
   }
@@ -2048,7 +2036,7 @@ async function submitTask(form) {
     }
     form.reset();
     state.selectedScheduleLessonId = lesson.id;
-    // Live Firestore listeners publish the new task or proposal to all open clients.
+    // Live Supabase updates publish the new task or proposal to all open clients.
     root.querySelector('#homework-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (error) {
     notify(error.message || 'Не удалось сохранить задание.', 'error');
