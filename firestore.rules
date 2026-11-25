@@ -343,11 +343,50 @@ service cloud.firestore {
       match /materials/{materialId} {
         allow get, list: if isMember(groupId);
         allow create: if isLeader(groupId)
+          && request.resource.data.keys().hasOnly([
+            'title', 'description', 'kind', 'externalUrl', 'storagePath',
+            'fileName', 'contentType', 'size', 'createdBy', 'createdAt', 'updatedAt'
+          ])
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.title is string
+          && request.resource.data.title.size() > 0
+          && request.resource.data.title.size() <= 180
+          && request.resource.data.description is string
+          && request.resource.data.description.size() <= 1000
+          && request.resource.data.kind in ['file', 'link']
+          && (
+            (request.resource.data.kind == 'link'
+              && request.resource.data.externalUrl is string
+              && request.resource.data.externalUrl.size() <= 2048
+              && request.resource.data.externalUrl.matches('^https?://.*')
+              && !request.resource.data.keys().hasAny(['storagePath']))
+            ||
+            (request.resource.data.kind == 'file'
+              && request.resource.data.storagePath is string
+              && request.resource.data.storagePath.matches('^groups/[^/]+/materials/[^/]+/[^/]+
+
+      match /lectures/{lectureId} {
+        allow get, list: if isMember(groupId);
+        allow create: if isLeader(groupId)
           && request.resource.data.createdBy == request.auth.uid
           && request.resource.data.title is string
           && request.resource.data.title.size() > 0
           && (request.resource.data.externalUrl is string || request.resource.data.storagePath is string);
         allow update, delete: if isLeader(groupId);
+      }
+    }
+  }
+}
+)
+              && request.resource.data.fileName is string
+              && request.resource.data.contentType is string
+              && request.resource.data.size is int
+              && request.resource.data.size > 0
+              && request.resource.data.size <= 20971520
+              && !request.resource.data.keys().hasAny(['externalUrl']))
+          );
+        allow update: if false;
+        allow delete: if isLeader(groupId);
       }
 
       match /lectures/{lectureId} {
