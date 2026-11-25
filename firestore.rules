@@ -33,9 +33,11 @@ service cloud.firestore {
         && username.matches('^[a-z0-9][a-z0-9._-]{2,23}$')
         && request.resource.data.keys().hasOnly(['authEmail', 'createdAt'])
         && request.resource.data.authEmail == request.auth.token.email;
-      allow update: if false;
-      allow delete: if signedIn()
-        && resource.data.authEmail == request.auth.token.email;
+      allow update: if signedIn()
+        && resource.data.authEmail == request.auth.token.email
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['disabled'])
+        && request.resource.data.disabled == true;
+      allow delete: if false;
     }
 
     match /users/{userId} {
