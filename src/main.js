@@ -1065,6 +1065,21 @@ function attendanceItemForPart(items, lessonId, personId, partKey, personField) 
   return candidates.find(item => !item.partKey) || null;
 }
 
+function attendanceMapForPart(items, lessonId, partKey, personField) {
+  const map = new Map();
+  items.filter(item =>
+    item.lessonId === lessonId &&
+    item.lessonDate === state.attendanceDate &&
+    attendancePartMatches(item, partKey)
+  ).forEach(item => {
+    const personId = item[personField];
+    if (!map.has(personId) || (partKey && item.partKey === partKey)) {
+      map.set(personId, item);
+    }
+  });
+  return map;
+}
+
 function attendanceDocumentId(lessonId, personId, partKey) {
   return partKey
     ? lessonId + '_' + state.attendanceDate + '_' + partKey + '_' + personId
@@ -1090,12 +1105,8 @@ function renderAttendanceRoster(lesson, partKey = null) {
       String(b.displayName || b.fullName || b.username || ''), 'ru', { sensitivity: 'base' }
     )
   );
-  const responses = new Map(state.attendance
-    .filter(item => item.lessonId === lesson.id && item.lessonDate === state.attendanceDate && attendancePartMatches(item, partKey))
-    .map(item => [item.userId, item]));
-  const records = new Map(state.attendanceRecords
-    .filter(item => item.lessonId === lesson.id && item.lessonDate === state.attendanceDate && attendancePartMatches(item, partKey))
-    .map(item => [item.studentId, item]));
+  const responses = attendanceMapForPart(state.attendance, lesson.id, partKey, 'userId');
+  const records = attendanceMapForPart(state.attendanceRecords, lesson.id, partKey, 'studentId');
   const missed = members.filter(member => responses.get(member.id)?.response === 'will_miss');
   const counts = {
     present: members.filter(member => records.get(member.id)?.status === 'present').length,
@@ -1221,11 +1232,11 @@ function renderAttendance() {
   const cards = lessons.map((lesson,index) => {
     const parts = attendanceParts(lesson);
     const partSummaries = parts.map(part => {
-      const responses = state.attendance.filter(item =>
-        item.lessonId === lesson.id && item.lessonDate === date && attendancePartMatches(item, part.partKey)
-      );
-      const attending = responses.filter(item => item.response === 'will_attend').length;
-      const missing = responses.filter(item => item.response === 'will_miss').length;
+      const resolved = state.groupMembers.map(member =>
+        attendanceItemForPart(state.attendance, lesson.id, member.id || member.userId, part.partKey, 'userId')
+      ).filter(Boolean);
+      const attending = resolved.filter(item => item.response === 'will_attend').length;
+      const missing = resolved.filter(item => item.response === 'will_miss').length;
       return parts.length > 1
         ? '<small>' + esc(part.label) + ': будут ' + attending + ' · не будут ' + missing + '</small>'
         : '<small>Будут: ' + attending + ' · Не будут: ' + missing + '</small>';
@@ -1442,13 +1453,15 @@ async function markAllPresent(lessonId, partKey = null) {
 
 async function excuseMissedStudents(lessonId, onlyStudentId = null, partKey = null) {
   if (state.role !== 'leader') return;
-  const missing = state.attendance.filter(item =>
-    item.lessonId === lessonId &&
-    item.lessonDate === state.attendanceDate &&
-    attendancePartMatches(item, partKey) &&
-    item.response === 'will_miss' &&
-    (!onlyStudentId || item.userId === onlyStudentId)
-  );
+  const missing = state.groupMembers
+    .map(member => {
+      const userId = member.id || member.userId;
+      const response = attendanceItemForPart(state.attendance, lessonId, userId, partKey, 'userId');
+      return response?.response === 'will_miss' && (!onlyStudentId || userId === onlyStudentId)
+        ? { userId }
+        : null;
+    })
+    .filter(Boolean);
   if (!missing.length) {
     notify('Нет студентов с ответом «Не буду» на выбранную часть.');
     return;
