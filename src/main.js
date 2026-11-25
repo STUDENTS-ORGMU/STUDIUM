@@ -1,4 +1,5 @@
 import './style.css';
+import { downloadAttendanceReport } from './attendance-report.js';
 import { auth, db, firebaseConfigured } from './firebase.js';
 import {
   createUserWithEmailAndPassword,
@@ -1216,6 +1217,65 @@ function renderStudentAttendance(lessons, date) {
     '</section>';
 }
 
+function renderAttendanceReportToolbar() {
+  return '<section class="attendance-report-toolbar"><div><p class="eyebrow">ЭКСПОРТ ОТЧЁТА</p><strong>Месячная ведомость посещаемости</strong><p class="muted">В Excel попадут только официальные отметки старосты — ответы студентов не учитываются.</p></div>' +
+    '<div class="attendance-report-controls"><label>Месяц<input type="month" id="attendance-report-month" value="' + today().slice(0, 7) + '"></label>' +
+    '<button type="button" class="btn primary" data-action="export-attendance-report">Скачать Excel</button></div></section>';
+}
+
+async function exportAttendanceReport(month) {
+  if (state.role !== 'leader') return;
+  if (!/^\\d{4}-(0[1-9]|1[0-2])$/.test(String(month || ''))) {
+    notify('Выбери месяц для отчёта.', 'error');
+    return;
+  }
+
+  const [year, monthNumber] = month.split('-').map(Number);
+  const lastDay = new Date(year, monthNumber, 0).getDate();
+  const fromDate = month + '-01';
+  const toDate = month + '-' + String(lastDay).padStart(2, '0');
+
+  setBusy(true);
+  try {
+    const recordsSnapshot = await getDocs(query(
+      collection(db, 'groups', state.group.id, 'attendanceRecords'),
+      where('lessonDate', '>=', fromDate),
+      where('lessonDate', '<=', toDate)
+    ));
+    // Report strictly follows the leader's official journal buttons.
+    // Student self-reported answers create source='student_response' records
+    // and are intentionally excluded from this export.
+    const leaderRecords = recordsSnapshot.docs
+      .map(item => ({ id: item.id, ...item.data() }))
+      .filter(item => item.source === 'leader');
+
+    const result = await downloadAttendanceReport({
+      month,
+      groupName: state.group.name || 'Учебная группа',
+      leaderName: displayFullName(state.profile),
+      members: state.groupMembers,
+      lessons: state.lessons,
+      records: leaderRecords,
+      specialty: state.group.specialty || '',
+      course: state.group.course || ''
+    });
+
+    const monthLabel = new Date(year, monthNumber - 1, 1, 12)
+      .toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
+    notify(
+      result.eventCount
+        ? 'Отчёт за ' + monthLabel + ' скачан. Учтено официальных пропусков: ' + result.eventCount + '.'
+        : 'Отчёт за ' + monthLabel + ' скачан. Официальных пропусков за этот месяц пока нет.',
+      'success'
+    );
+  } catch (error) {
+    console.error('STUDIUM attendance report:', error);
+    notify(error.message || 'Не удалось сформировать Excel-отчёт.', 'error');
+  } finally {
+    setBusy(false);
+  }
+}
+
 function renderAttendance() {
   const date = state.attendanceDate;
   const [y,m,d] = date.split('-').map(Number);
@@ -1255,6 +1315,7 @@ function renderAttendance() {
         : selectedParts[0].partKey)
     : null;
   return heading('ПОСЕЩАЕМОСТЬ', 'Журнал старосты', 'Выбери пару и отмечай посещаемость по списку группы.') +
+    renderAttendanceReportToolbar() +
     '<div class="date-picker attendance-date-leader"><label>Дата<input type="date" id="attendance-date" value="' + date + '"></label><span>' + esc(dateLabel) + ' · ' + (week === 1 ? 'Первая' : 'Вторая') + ' учебная неделя</span></div>' +
     (lessons.length ? '<div class="attendance-lesson-grid">' + cards + '</div>' : empty('На эту дату пар нет', 'Выбери другую дату или проверь расписание группы.')) +
     (selected ? renderAttendanceRoster(selected, selectedPartKey) : (lessons.length ? '<p class="muted small attendance-pick-hint">Нажми на пару выше — откроется список группы по алфавиту.</p>' : ''));
@@ -2151,6 +2212,10 @@ function bindEvents() {
     }
 
     if (button.dataset.action === 'delete-task') return deleteTask(button.dataset.id);
+    if (button.dataset.action === 'export-attendance-report') {
+      const month = root.querySelector('#attendance-report-month')?.value || '';
+      return exportAttendanceReport(month);
+    }
 
     if (button.dataset.attendanceLesson) {
       state.selectedAttendanceLessonId = button.dataset.attendanceLesson;
