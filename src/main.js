@@ -14,6 +14,7 @@ import {
   deleteDoc,
   getDoc,
   getDocs,
+  onSnapshot,
   orderBy,
   query,
   runTransaction,
@@ -80,7 +81,9 @@ const state = {
   scheduleEditorSlot: null,
   selectedScheduleLessonId: null,
   busy: false,
-  authMode: 'login'
+  authMode: 'login',
+  liveUnsubscribers: [],
+  liveSubscriptionToken: 0
 };
 
 function notify(message, kind = 'info') {
@@ -306,6 +309,7 @@ async function boot(user = auth.currentUser) {
   if (!firebaseConfigured) return renderSetup();
   state.user = user || null;
   if (!state.user) {
+    stopLiveHomeworkUpdates();
     state.profile = null;
     state.group = null;
     state.memberships = [];
@@ -343,6 +347,58 @@ function renderOnboarding() {
   frame('<main class="onboard"><header><a class="wordmark" href="#">STUDIUM</a><button class="btn ghost" data-action="logout">Выйти</button></header><section><p class="eyebrow">ДОБРО ПОЖАЛОВАТЬ</p><h1>Твоя учебная<br><em>группа начинается здесь.</em></h1><p class="muted lead">Создай новое пространство или присоединись к группе по коду приглашения.</p><div class="onboard-grid"><form id="create-group" class="panel form"><span class="tile-icon">＋</span><h2>Создать группу</h2><p class="muted">Ты станешь старостой группы.</p><label>Название<input name="name" required minlength="2" maxlength="80" placeholder="Например, ИС-21"></label><button class="btn primary">Создать группу</button></form><form id="join-group" class="panel form"><span class="tile-icon">↗</span><h2>Вступить в группу</h2><p class="muted">Введи код, который отправил староста.</p><label>Код приглашения<input name="code" required maxlength="12" placeholder="A4K8P2QW9T2"></label><button class="btn secondary">Присоединиться</button></form></div></section></main>');
 }
 
+function stopLiveHomeworkUpdates() {
+  state.liveSubscriptionToken += 1;
+  state.liveUnsubscribers.forEach(unsubscribe => {
+    try { unsubscribe(); } catch (error) { console.warn('STUDIUM unsubscribe:', error); }
+  });
+  state.liveUnsubscribers = [];
+}
+
+function subscribeToLiveHomework() {
+  stopLiveHomeworkUpdates();
+  if (!state.user || !state.group?.id) return;
+
+  const groupId = state.group.id;
+  const userId = state.user.uid;
+  const role = state.role;
+  const token = state.liveSubscriptionToken;
+  const isCurrentSubscription = () =>
+    token === state.liveSubscriptionToken &&
+    state.group?.id === groupId &&
+    state.user?.uid === userId;
+
+  const tasksQuery = query(
+    collection(db, 'groups', groupId, 'tasks'),
+    orderBy('lessonDate', 'asc')
+  );
+  const suggestionsRef = collection(db, 'groups', groupId, 'taskSuggestions');
+  const suggestionsQuery = role === 'leader'
+    ? query(suggestionsRef, where('status', '==', 'pending'), orderBy('createdAt', 'desc'))
+    : query(suggestionsRef, where('submittedBy', '==', userId), orderBy('createdAt', 'desc'));
+
+  const handleListenerError = (label, error) => {
+    if (!isCurrentSubscription()) return;
+    console.error('STUDIUM live update failed:', label, error);
+    notify('Не удалось получать обновления ' + label + ' в реальном времени. Проверь подключение к интернету.', 'error');
+  };
+
+  const stopTasks = onSnapshot(tasksQuery, snapshot => {
+    if (!isCurrentSubscription()) return;
+    state.tasks = snapshot.docs.map(item => ({ id: item.id, ...item.data() }))
+      .sort((a,b) => String(a.lessonDate || a.dueDate || '').localeCompare(String(b.lessonDate || b.dueDate || '')));
+    renderWorkspace();
+  }, error => handleListenerError('домашних заданий', error));
+
+  const stopSuggestions = onSnapshot(suggestionsQuery, snapshot => {
+    if (!isCurrentSubscription()) return;
+    state.suggestions = snapshot.docs.map(item => ({ id: item.id, ...item.data() }));
+    renderWorkspace();
+  }, error => handleListenerError('предложений ДЗ', error));
+
+  state.liveUnsubscribers = [stopTasks, stopSuggestions];
+}
+
 async function selectGroup(groupId) {
   const membership = state.memberships.find(item => item.groupId === groupId);
   if (!membership) throw new Error('Группа не найдена в твоём списке.');
@@ -354,12 +410,14 @@ async function selectGroup(groupId) {
     throw error;
   }
   if (!groupSnapshot.exists()) throw new Error('Учебная группа не найдена.');
+  stopLiveHomeworkUpdates();
   state.group = { id: groupSnapshot.id, ...groupSnapshot.data() };
   state.activeMembership = membership;
   state.role = membership.role;
   localStorage.setItem('studium-group', groupId);
   await loadWorkspace();
   renderWorkspace();
+  subscribeToLiveHomework();
 }
 
 async function loadWorkspace() {
@@ -1405,8 +1463,7 @@ async function submitTask(form) {
     }
     form.reset();
     state.selectedScheduleLessonId = lesson.id;
-    await loadWorkspace();
-    renderWorkspace();
+    // Live Firestore listeners publish the new task or proposal to all open clients.
     root.querySelector('#homework-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (error) {
     notify(error.message || 'Не удалось сохранить задание.', 'error');
@@ -1456,8 +1513,7 @@ async function reviewSuggestion(suggestionId, approve) {
       }
     });
     notify(approve ? 'Задание опубликовано для группы.' : 'Предложение отклонено.', 'success');
-    await loadWorkspace();
-    renderWorkspace();
+    // The task and suggestion listeners update the open pages automatically.
   } catch (error) {
     notify(error.message || 'Не удалось обработать предложение.', 'error');
   } finally {
@@ -1710,6 +1766,7 @@ async function saveCycle(form) {
 
 async function doSignOut() {
   setBusy(true);
+  stopLiveHomeworkUpdates();
   try {
     await signOut(auth);
     state.user = null;
