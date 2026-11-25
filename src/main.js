@@ -339,7 +339,7 @@ function taskForm(lesson) {
   const lessonDate = nextLessonDate(lesson);
   const timeLabel = (lesson.startsAt || '') + (lesson.endsAt ? '–' + lesson.endsAt : '');
   return '<section class="panel task-compose task-compose-inline"><div class="task-compose-intro">' +
-    '<p class="eyebrow">НОВОЕ TODO</p><h2>' + (state.role === 'leader' ? 'Опубликовать ДЗ к этой паре' : 'Предложить ДЗ к этой паре') + '</h2>' +
+    '<p class="eyebrow">НОВОЕ ДЗ</p><h2>' + (state.role === 'leader' ? 'Опубликовать ДЗ к этой паре' : 'Предложить ДЗ к этой паре') + '</h2>' +
     '<p class="muted">Домашнее задание будет прикреплено к выбранному занятию.</p></div>' +
     '<div class="task-selected-lesson"><div class="task-selected-lesson-details">' +
     '<div><small>Предмет</small><strong>' + esc(lesson.subject) + '</strong></div>' +
@@ -360,7 +360,7 @@ function taskForm(lesson) {
     '</form></section>';
 }
 
-function renderTodoPanel() {
+function renderHomeworkPanel() {
   const selectedLesson = state.lessons.find(item => item.id === state.selectedScheduleLessonId) || null;
   const visibleTasks = selectedLesson
     ? state.tasks.filter(item =>
@@ -370,20 +370,20 @@ function renderTodoPanel() {
       )
     : state.tasks;
   const selectedName = selectedLesson
-    ? 'TODO · ' + selectedLesson.subject
-    : 'TODO · Все домашние задания';
+    ? 'ДЗ · ' + selectedLesson.subject
+    : 'ДЗ · Все домашние задания';
   const resetButton = selectedLesson
-    ? '<button class="btn ghost todo-reset" type="button" data-action="show-all-todos">Все задания</button>'
+    ? '<button class="btn ghost homework-reset" type="button" data-action="show-all-homework">Все задания</button>'
     : '';
   const pairLabel = selectedLesson
-    ? '<p class="muted todo-context">Показаны задания только к выбранной паре. Нажми другую пару выше, чтобы переключить список.</p>'
-    : '<p class="muted todo-context">Выбери пару в расписании выше, чтобы отфильтровать TODO по конкретному занятию. Пока показаны все задания группы.</p>';
+    ? '<p class="muted homework-context">Показаны задания только к выбранной паре. Нажми другую пару выше, чтобы переключить список.</p>'
+    : '<p class="muted homework-context">Выбери пару в расписании выше, чтобы отфильтровать ДЗ по конкретному занятию. Пока показаны все задания группы.</p>';
   const taskContent = visibleTasks.length
     ? taskCards(visibleTasks)
     : empty(selectedLesson ? 'К этой паре пока нет заданий' : 'Пока нет домашних заданий',
         selectedLesson ? 'Староста может опубликовать ДЗ, а студент — предложить его.' : 'Домашние задания, привязанные к парам, появятся здесь.');
   const compose = selectedLesson ? taskForm(selectedLesson) : '';
-  return '<section class="todo-section" id="todo-panel"><div class="todo-heading"><div><p class="eyebrow">ПОСЛЕ РАСПИСАНИЯ</p><h2>' + esc(selectedName) + '</h2></div>' + resetButton + '</div>' +
+  return '<section class="homework-section" id="homework-panel"><div class="homework-heading"><div><p class="eyebrow">ПОСЛЕ РАСПИСАНИЯ</p><h2>' + esc(selectedName) + '</h2></div>' + resetButton + '</div>' +
     pairLabel + taskContent + compose + '</section>';
 }
 
@@ -455,7 +455,7 @@ function scheduleLessonCard(lesson, startIndex, span) {
     '<strong>' + esc(lesson.subject) + '</strong>' +
     (lesson.room ? '<small class="schedule-room">' + esc(lesson.room) + '</small>' : '') +
     (lesson.description ? '<p class="schedule-description">' + esc(lesson.description) + '</p>' : '') +
-    '<small class="schedule-task-hint">' + (selected ? 'Задания выбраны ниже' : 'Нажми, чтобы увидеть TODO') + '</small>' +
+    '<small class="schedule-task-hint">' + (selected ? 'Задания выбраны ниже' : 'Нажми, чтобы увидеть ДЗ') + '</small>' +
     (state.role === 'leader' ? '<button type="button" class="lesson-delete" title="Удалить пару" aria-label="Удалить пару" data-action="delete-lesson" data-id="' + esc(lesson.id) + '">×</button>' : '') +
     '</article>';
 }
@@ -571,7 +571,7 @@ function renderSchedule() {
     ? 'Нажми на пару, чтобы увидеть связанные с ней задания. Для добавления занятия наведи курсор на свободную ячейку.'
     : 'Нажми на пару, чтобы увидеть домашние задания именно к этому занятию.';
   return heading('УЧЕБНЫЙ ПРОЦЕСС', 'Расписание и домашние задания', hint) +
-    weekSummary + weeks + renderTodoPanel();
+    weekSummary + weeks + renderHomeworkPanel();
 }
 
 function lessonWeekFor(date) {
@@ -650,13 +650,13 @@ function bindEvents() {
     if (button.dataset.scheduleLesson !== undefined) {
       state.selectedScheduleLessonId = button.dataset.id;
       renderWorkspace();
-      root.querySelector('#todo-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      root.querySelector('#homework-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
     }
-    if (button.dataset.action === 'show-all-todos') {
+    if (button.dataset.action === 'show-all-homework') {
       state.selectedScheduleLessonId = null;
       renderWorkspace();
-      root.querySelector('#todo-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      root.querySelector('#homework-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
     }
     if (button.dataset.action === 'open-lesson-cell') {
@@ -897,7 +897,7 @@ async function submitTask(form) {
     state.selectedScheduleLessonId = lesson.id;
     await loadWorkspace();
     renderWorkspace();
-    root.querySelector('#todo-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    root.querySelector('#homework-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (error) {
     notify(error.message || 'Не удалось сохранить задание.', 'error');
   } finally {
