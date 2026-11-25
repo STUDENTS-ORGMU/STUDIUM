@@ -1,13 +1,13 @@
 # Supabase backend
 
-STUDIUM uses Supabase as its only backend. Firebase/Firestore is no longer part of the application. No Firebase data is migrated.
+STUDIUM uses Supabase as its only backend. No legacy data import is required.
 
 ## One-time project setup
 
 1. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in local `.env` and GitHub Actions Variables.
 2. Disable email confirmation in Supabase Auth because users register and sign in with a generated `<username>@studium.invalid` alias.
 3. Apply the SQL migrations in `supabase/migrations` in numerical order.
-5. Confirm the private `group-materials` bucket exists and its RLS policies are installed.
+4. Confirm the private `group-materials` bucket exists and its RLS policies are installed.
 
 ## Database layout
 
