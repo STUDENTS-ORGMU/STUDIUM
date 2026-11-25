@@ -1225,7 +1225,7 @@ function renderAttendanceReportToolbar() {
 
 async function exportAttendanceReport(month) {
   if (state.role !== 'leader') return;
-  if (!/^\\d{4}-(0[1-9]|1[0-2])$/.test(String(month || ''))) {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(String(month || ''))) {
     notify('Выбери месяц для отчёта.', 'error');
     return;
   }
