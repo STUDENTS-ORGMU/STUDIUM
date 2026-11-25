@@ -344,7 +344,10 @@ function taskCards(items) {
     const dateLabel = task.lessonDate ? dateText(task.lessonDate) : 'Дата пары не указана';
     const timeLabel = task.lessonTime || lesson?.startsAt || '';
     const pairLabel = [dayLabel, dateLabel, timeLabel].filter(Boolean).join(' · ');
-    return '<article class="task-card ' + (done ? 'done' : '') + '"><div class="task-copy"><small>' + esc(task.subject || 'Без предмета') + '</small><h3>' + esc(task.title) + '</h3><p>' + esc(task.description || '') + '</p><div class="meta"><span>Пара: ' + esc(pairLabel || dateLabel) + '</span></div></div><label class="check"><input type="checkbox" data-progress="' + esc(task.id) + '" ' + (done ? 'checked' : '') + '> Выполнено</label></article>';
+    const deleteButton = state.role === 'leader'
+      ? '<button type="button" class="task-delete-button" data-action="delete-task" data-id="' + esc(task.id) + '">Удалить ДЗ</button>'
+      : '';
+    return '<article class="task-card ' + (done ? 'done' : '') + '"><div class="task-copy"><small>' + esc(task.subject || 'Без предмета') + '</small><h3>' + esc(task.title) + '</h3><p>' + esc(task.description || '') + '</p><div class="meta"><span>Пара: ' + esc(pairLabel || dateLabel) + '</span></div></div><div class="task-card-actions"><label class="check"><input type="checkbox" data-progress="' + esc(task.id) + '" ' + (done ? 'checked' : '') + '> Выполнено</label>' + deleteButton + '</div></article>';
   }).join('') + '</div>';
 }
 
@@ -983,6 +986,42 @@ async function excuseMissedStudents(lessonId, onlyStudentId = null) {
   }
 }
 
+async function deleteTask(taskId) {
+  if (state.role !== 'leader') return;
+  const task = state.tasks.find(item => item.id === taskId);
+  if (!task) {
+    notify('Задание не найдено или уже удалено.', 'error');
+    return;
+  }
+  if (!window.confirm('Удалить ДЗ «' + task.title + '»? Личные отметки выполнения этого задания тоже будут удалены.')) return;
+
+  setBusy(true);
+  try {
+    const progressSnapshot = await getDocs(query(
+      collection(db, 'groups', state.group.id, 'taskProgress'),
+      where('taskId', '==', taskId)
+    ));
+
+    for (let offset = 0; offset < progressSnapshot.docs.length; offset += 450) {
+      const batch = writeBatch(db);
+      progressSnapshot.docs.slice(offset, offset + 450).forEach(progressDoc => {
+        batch.delete(progressDoc.ref);
+      });
+      await batch.commit();
+    }
+
+    await deleteDoc(doc(db, 'groups', state.group.id, 'tasks', taskId));
+    notify('Домашнее задание удалено.', 'success');
+    await loadWorkspace();
+    renderWorkspace();
+  } catch (error) {
+    console.error('STUDIUM: failed to delete task', error);
+    notify(error.message || 'Не удалось удалить домашнее задание.', 'error');
+  } finally {
+    setBusy(false);
+  }
+}
+
 function bindEvents() {
   root.addEventListener('click', async event => {
     const button = event.target.closest('button,[data-schedule-lesson]');
@@ -1004,6 +1043,8 @@ function bindEvents() {
       root.querySelector('#homework-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
     }
+
+    if (button.dataset.action === 'delete-task') return deleteTask(button.dataset.id);
 
     if (button.dataset.attendanceLesson) {
       state.selectedAttendanceLessonId = button.dataset.attendanceLesson;
