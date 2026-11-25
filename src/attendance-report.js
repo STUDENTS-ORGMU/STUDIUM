@@ -56,7 +56,7 @@ function attendanceEvents(records, lessonsById) {
   records.forEach(record => {
     const lesson = lessonsById.get(record.lessonId);
     if (!lesson || record.source !== 'leader') return;
-    if (!['absent', 'excused'].includes(record.status)) return;
+    if (!['present', 'absent', 'excused', 'late', 'unmarked'].includes(record.status)) return;
     const date = normalizeDate(record.lessonDate);
     if (!date) return;
     const key = record.lessonId + '|' + date;
