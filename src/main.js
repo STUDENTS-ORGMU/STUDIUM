@@ -730,7 +730,7 @@ function renderAttendance() {
     .sort((a,b) => String(a.startsAt).localeCompare(String(b.startsAt)));
 
   if (state.role !== 'leader') {
-    return heading('ПОСЕЩАЕМОСТЬ', 'Моя посещаемость', 'Предварительная явка на занятия группы.') + renderStudentAttendance(lessons, date);
+    return renderStudentAttendance(lessons, date);
   }
 
   const selected = lessons.find(item => item.id === state.selectedAttendanceLessonId) || null;
