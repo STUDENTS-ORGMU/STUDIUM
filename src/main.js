@@ -1,6 +1,6 @@
 import './style.css';
 import { downloadAttendanceReport } from './attendance-report.js';
-import { auth, db, firebaseConfigured } from './firebase.js';
+import { auth, db, storage, firebaseConfigured } from './firebase.js';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -28,6 +28,7 @@ import {
   where,
   writeBatch
 } from 'firebase/firestore';
+import { deleteObject, getBytes, ref as storageRef, uploadBytes } from 'firebase/storage';
 
 const root = document.querySelector('#app');
 const normalizeUsername = value => String(value ?? '').trim().toLowerCase();
@@ -127,6 +128,7 @@ const state = {
   progress: new Map(),
   attendance: [],
   attendanceRecords: [],
+  materials: [],
   groupMembers: [],
   selectedAttendanceLessonId: null,
   selectedAttendancePartKey: null,
@@ -484,6 +486,7 @@ async function loadWorkspace() {
   const suggestionsRef = collection(db, 'groups', gid, 'taskSuggestions');
   const progressRef = collection(db, 'groups', gid, 'taskProgress');
   const attendanceRef = collection(db, 'groups', gid, 'attendanceResponses');
+  const materialsRef = collection(db, 'groups', gid, 'materials');
 
   const taskQuery = query(tasksRef, orderBy('lessonDate', 'asc'));
   const lessonQuery = query(lessonsRef, orderBy('weekday', 'asc'), orderBy('weekNumber', 'asc'), orderBy('startsAt', 'asc'));
@@ -494,6 +497,7 @@ async function loadWorkspace() {
   const attendanceConstraints = [where('lessonDate', '==', state.attendanceDate)];
   if (state.role !== 'leader') attendanceConstraints.push(where('userId', '==', state.user.uid));
   const attendanceQuery = query(attendanceRef, ...attendanceConstraints);
+  const materialsQuery = query(materialsRef, orderBy('createdAt', 'desc'));
 
   const groupMembersQuery = getDocs(collection(db, 'groups', gid, 'members'));
   const officialAttendanceQuery = state.role === 'leader'
@@ -509,14 +513,15 @@ async function loadWorkspace() {
       throw error;
     }
   };
-  const [tasks, suggestions, lessons, progress, attendance, members, attendanceRecords] = await Promise.all([
+  const [tasks, suggestions, lessons, progress, attendance, members, attendanceRecords, materials] = await Promise.all([
     readQuery('Домашние задания', getDocs(taskQuery)),
     readQuery('Предложения ДЗ', getDocs(suggestionQuery)),
     readQuery('Расписание', getDocs(lessonQuery)),
     readQuery('Личный прогресс', getDocs(progressQuery)),
     readQuery('Предварительная посещаемость', getDocs(attendanceQuery)),
     readQuery('Список участников группы', groupMembersQuery),
-    readQuery('Официальная посещаемость', officialAttendanceQuery)
+    readQuery('Официальная посещаемость', officialAttendanceQuery),
+    readQuery('Материалы группы', getDocs(materialsQuery))
   ]);
 
   state.tasks = tasks.docs.map(item => ({ id: item.id, ...item.data() }))
@@ -527,6 +532,7 @@ async function loadWorkspace() {
   state.attendance = attendance.docs.map(item => ({ id: item.id, ...item.data() }));
   state.groupMembers = members.docs.map(item => ({ id: item.id, ...item.data() }));
   state.attendanceRecords = attendanceRecords.docs.map(item => ({ id: item.id, ...item.data() }));
+  state.materials = materials.docs.map(item => ({ id: item.id, ...item.data() }));
 }
 
 function navButton(tab, icon, title) {
@@ -557,14 +563,198 @@ function empty(title, text) {
   return '<div class="empty"><div>✳</div><h3>' + title + '</h3><p>' + text + '</p></div>';
 }
 
+
+function materialDateLabel(value) {
+  const date = value?.toDate ? value.toDate() : (value ? new Date(value) : null);
+  return date && !Number.isNaN(date.getTime())
+    ? date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
+    : 'Дата не указана';
+}
+
+function renderMaterialItem(item) {
+  const isFile = item.kind === 'file' || Boolean(item.storagePath);
+  const detail = isFile
+    ? [item.fileName || 'Файл', item.size ? (item.size / 1024 / 1024).toFixed(1).replace('.', ',') + ' МБ' : 'Файл'].join(' · ')
+    : (item.externalUrl || 'Внешняя ссылка');
+  const action = isFile
+    ? '<button type="button" class="btn ghost material-open" data-action="download-material" data-id="' + esc(item.id) + '">Скачать</button>'
+    : '<a class="btn ghost material-open" href="' + esc(item.externalUrl) + '" target="_blank" rel="noopener noreferrer">Открыть ссылку ↗</a>';
+  return '<article class="material-row"><span class="material-icon">' + (isFile ? '↧' : '↗') + '</span>' +
+    '<div class="material-copy"><strong>' + esc(item.title) + '</strong>' +
+    '<small>' + esc(detail) + ' · ' + materialDateLabel(item.createdAt) + '</small>' +
+    (item.description ? '<p>' + esc(item.description) + '</p>' : '') + '</div>' +
+    '<div class="material-actions">' + action +
+    (state.role === 'leader' ? '<button type="button" class="material-delete" data-action="delete-material" data-id="' + esc(item.id) + '" aria-label="Удалить материал" title="Удалить">×</button>' : '') +
+    '</div></article>';
+}
+
+function renderLibrary() {
+  const canManage = state.role === 'leader';
+  const uploadPanel = canManage
+    ? '<div class="material-create-grid">' +
+      '<form id="material-upload-form" class="panel material-form">' +
+        '<p class="eyebrow">ЗАГРУЗКА ФАЙЛА</p><h3>Прикрепить файл</h3>' +
+        '<label>Название<input name="title" maxlength="180" required placeholder="Например, Методические указания"></label>' +
+        '<label>Файл<input name="file" type="file" required accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.rtf,.jpg,.jpeg,.png,.webp,.zip"></label>' +
+        '<small class="muted">PDF, Word, PowerPoint, Excel, изображения и ZIP. До 20 МБ.</small>' +
+        '<label>Описание <span class="muted">(необязательно)</span><textarea name="description" rows="2" maxlength="1000" placeholder="Краткое описание материала"></textarea></label>' +
+        '<button class="btn primary" type="submit">Загрузить файл</button>' +
+      '</form>' +
+      '<form id="material-link-form" class="panel material-form">' +
+        '<p class="eyebrow">ВНЕШНИЙ РЕСУРС</p><h3>Добавить ссылку</h3>' +
+        '<label>Название<input name="title" maxlength="180" required placeholder="Например, Учебник по биологии"></label>' +
+        '<label>Ссылка<input name="url" type="url" maxlength="2048" required placeholder="https://..."></label>' +
+        '<label>Описание <span class="muted">(необязательно)</span><textarea name="description" rows="2" maxlength="1000" placeholder="Что находится по ссылке"></textarea></label>' +
+        '<button class="btn primary" type="submit">Добавить ссылку</button>' +
+      '</form></div>'
+    : '<p class="material-student-note">Материалы добавляет староста. Ты можешь открывать и скачивать всё, что опубликовано для группы.</p>';
+  const items = state.materials.length
+    ? '<div class="material-list">' + state.materials.map(renderMaterialItem).join('') + '</div>'
+    : empty('Материалов пока нет', canManage ? 'Загрузи первый файл или добавь полезную ссылку для группы.' : 'Староста ещё не добавил материалы.');
+  return heading('БИБЛИОТЕКА', 'Материалы', 'Методички, ссылки, презентации и учебные файлы для всей группы.') +
+    '<section class="panel material-library-panel"><div class="material-section-heading"><div><p class="eyebrow">ОБЩАЯ БИБЛИОТЕКА</p><h2>Материалы группы</h2></div><span class="material-count">' + state.materials.length + '</span></div>' +
+    uploadPanel + items + '</section>' +
+    '<section class="panel lecture-library-panel"><p class="eyebrow">ОТДЕЛЬНЫЙ РАЗДЕЛ</p><h2>Лекции</h2><p class="muted">Здесь будет отдельная библиотека лекций с распределением по дисциплинам. Пока материалы и ссылки добавляются в общую библиотеку группы.</p></section>';
+}
+
+function validateMaterialFile(file) {
+  const allowed = /\.(pdf|doc|docx|ppt|pptx|xls|xlsx|txt|rtf|jpe?g|png|webp|zip)$/i;
+  if (!allowed.test(file.name)) throw new Error('Этот тип файла пока не поддерживается.');
+  if (file.size > 20 * 1024 * 1024) throw new Error('Размер файла не должен превышать 20 МБ.');
+  if (!file.size) throw new Error('Файл пустой.');
+}
+
+async function uploadGroupMaterial(form) {
+  if (state.role !== 'leader') return notify('Добавлять материалы может только староста.', 'error');
+  if (!storage) return notify('Firebase Storage не настроен. Проверь VITE_FIREBASE_STORAGE_BUCKET и включи Storage в Firebase Console.', 'error');
+  const data = new FormData(form);
+  const file = data.get('file');
+  const title = String(data.get('title') || '').trim();
+  const description = String(data.get('description') || '').trim();
+  if (!(file instanceof File) || !file.name) return notify('Выбери файл для загрузки.', 'error');
+  if (!title || title.length > 180) return notify('Укажи название до 180 символов.', 'error');
+  if (description.length > 1000) return notify('Описание слишком длинное.', 'error');
+  try { validateMaterialFile(file); } catch (error) { return notify(error.message, 'error'); }
+
+  const mimeByExtension = { pdf: 'application/pdf', doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', ppt: 'application/vnd.ms-powerpoint', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', txt: 'text/plain', rtf: 'application/rtf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', zip: 'application/zip' };
+  const extension = file.name.split('.').pop().toLowerCase();
+  const contentType = file.type || mimeByExtension[extension] || '';
+  if (!contentType) return notify('Не удалось определить тип файла.', 'error');
+
+  setBusy(true);
+  const materialRef = doc(collection(db, 'groups', state.group.id, 'materials'));
+  const safeName = file.name.replace(/[\\/]/g, '_').replace(/[^\p{L}\p{N}._ -]/gu, '_').slice(0, 140) || 'file';
+  const path = 'groups/' + state.group.id + '/materials/' + materialRef.id + '/' + safeName;
+  try {
+    await uploadBytes(storageRef(storage, path), file, {
+      contentType,
+      customMetadata: { uploadedBy: state.user.uid }
+    });
+    await setDoc(materialRef, {
+      title, description, kind: 'file', fileName: file.name,
+      contentType,
+      size: file.size, storagePath: path,
+      createdBy: state.user.uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+    });
+    notify('Файл добавлен в материалы группы.', 'success');
+    await loadWorkspace();
+    renderWorkspace();
+  } catch (error) {
+    try { await deleteObject(storageRef(storage, path)); } catch {}
+    console.error('STUDIUM material upload failed:', error);
+    notify(error.message || 'Не удалось загрузить файл. Проверь настройки Firebase Storage и правила доступа.', 'error');
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function addGroupMaterialLink(form) {
+  if (state.role !== 'leader') return notify('Добавлять материалы может только староста.', 'error');
+  const data = new FormData(form);
+  const title = String(data.get('title') || '').trim();
+  const description = String(data.get('description') || '').trim();
+  const rawUrl = String(data.get('url') || '').trim();
+  let url;
+  try {
+    url = new URL(rawUrl);
+    if (!['https:', 'http:'].includes(url.protocol)) throw new Error('Недопустимый протокол');
+  } catch {
+    return notify('Укажи корректную ссылку, начинающуюся с https:// или http://.', 'error');
+  }
+  if (!title || title.length > 180) return notify('Укажи название до 180 символов.', 'error');
+  if (description.length > 1000 || url.href.length > 2048) return notify('Проверь длину описания и ссылки.', 'error');
+
+  setBusy(true);
+  try {
+    await addDoc(collection(db, 'groups', state.group.id, 'materials'), {
+      title, description, kind: 'link', externalUrl: url.href,
+      createdBy: state.user.uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+    });
+    notify('Ссылка добавлена в материалы группы.', 'success');
+    await loadWorkspace();
+    renderWorkspace();
+  } catch (error) {
+    console.error('STUDIUM material link save failed:', error);
+    notify(error.message || 'Не удалось сохранить ссылку. Проверь правила Firestore.', 'error');
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function openGroupMaterial(materialId) {
+  const item = state.materials.find(material => material.id === materialId);
+  if (!item?.storagePath || !storage) return notify('Файл не найден.', 'error');
+  setBusy(true);
+  try {
+    const bytes = await getBytes(storageRef(storage, item.storagePath), 20 * 1024 * 1024);
+    const blob = new Blob([bytes], { type: item.contentType || 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = item.fileName || item.title || 'material';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (error) {
+    notify(error.message || 'Не удалось скачать файл.', 'error');
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function deleteGroupMaterial(materialId) {
+  if (state.role !== 'leader') return notify('Удалять материалы может только староста.', 'error');
+  const item = state.materials.find(material => material.id === materialId);
+  if (!item) return;
+  if (!window.confirm('Удалить материал «' + item.title + '»?')) return;
+  setBusy(true);
+  try {
+    if (item.storagePath && storage) {
+      try { await deleteObject(storageRef(storage, item.storagePath)); }
+      catch (error) {
+        if (error.code !== 'storage/object-not-found') throw error;
+      }
+    }
+    await deleteDoc(doc(db, 'groups', state.group.id, 'materials', materialId));
+    notify('Материал удалён.', 'success');
+    await loadWorkspace();
+    renderWorkspace();
+  } catch (error) {
+    console.error('STUDIUM material delete failed:', error);
+    notify(error.message || 'Не удалось удалить материал. Проверь правила доступа.', 'error');
+  } finally {
+    setBusy(false);
+  }
+}
+
 function renderCurrentTab() {
   if (state.tab === 'profile') return renderProfile();
   if (state.tab === 'deadlines') return renderDeadlines();
   if (state.tab === 'tasks' || state.tab === 'schedule') return renderSchedule();
   if (state.tab === 'moderation' && state.role === 'leader') return renderModeration();
   if (state.tab === 'attendance') return renderAttendance();
-  if (state.tab === 'library') return heading('БИБЛИОТЕКА', 'Материалы', 'Методички, ссылки, презентации и лекции.') +
-    '<div class="grid-two"><article class="panel"><h2>Материалы группы</h2><p class="muted">Подключение файлов через Firebase Storage — следующий этап.</p></article><article class="panel"><h2>Лекции</h2><p class="muted">Отдельная библиотека лекций будет подключена к Firestore и Storage.</p></article></div>';
+  if (state.tab === 'library') return renderLibrary();
   if (state.tab === 'manage') return renderManage();
   return renderOverview();
 }
@@ -2212,6 +2402,8 @@ function bindEvents() {
     }
 
     if (button.dataset.action === 'delete-task') return deleteTask(button.dataset.id);
+    if (button.dataset.action === 'download-material') return openGroupMaterial(button.dataset.id);
+    if (button.dataset.action === 'delete-material') return deleteGroupMaterial(button.dataset.id);
     if (button.dataset.action === 'export-attendance-report') {
       const month = root.querySelector('#attendance-report-month')?.value || '';
       return exportAttendanceReport(month);
@@ -2294,6 +2486,8 @@ function bindEvents() {
     if (form.id === 'task-form') return submitTask(form);
     if (form.id === 'lesson-form') return submitLesson(form);
     if (form.id === 'cycle-form') return saveCycle(form);
+    if (form.id === 'material-upload-form') return uploadGroupMaterial(form);
+    if (form.id === 'material-link-form') return addGroupMaterialLink(form);
   });
 
   root.addEventListener('change', async event => {
