@@ -606,7 +606,9 @@ function renderHomeworkPanel() {
     ? taskCards(visibleTasks)
     : empty(selectedLesson ? 'К этой паре пока нет заданий' : 'Пока нет домашних заданий',
         selectedLesson ? 'Староста может опубликовать ДЗ, а студент — предложить его.' : 'Домашние задания, привязанные к парам, появятся здесь.');
-  const compose = selectedLesson ? taskForm(selectedLesson) : '';
+  // Only one homework entry is allowed per lesson. The live tasks listener
+  // removes the compose form automatically as soon as a task is published.
+  const compose = selectedLesson && visibleTasks.length === 0 ? taskForm(selectedLesson) : '';
   return '<section class="homework-section" id="homework-panel"><div class="homework-heading"><div><p class="eyebrow">ПОСЛЕ РАСПИСАНИЯ</p><h2>' + esc(selectedName) + '</h2></div>' + resetButton + '</div>' +
     pairLabel + taskContent + compose + '</section>';
 }
