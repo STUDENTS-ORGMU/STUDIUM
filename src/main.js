@@ -562,7 +562,7 @@ function renderCurrentTab() {
 }
 
 function renderProfile() {
-  const fullName = state.profile?.fullName || displayFullName(state.profile);
+  const fullName = displayFullName(state.profile);
   const username = state.profile?.username || '';
   return heading('ЛИЧНЫЙ КАБИНЕТ', 'Мой профиль', 'Обнови свои данные. Изменения ФИО появятся в списке группы и журнале посещаемости.') +
     '<div class="profile-settings-grid">' +
