@@ -74,6 +74,7 @@ const state = {
   attendance: [],
   attendanceDate: today(),
   scheduleEditorSlot: null,
+  selectedTaskLessonId: null,
   busy: false,
   authMode: 'login'
 };
@@ -336,38 +337,68 @@ function taskCards(items) {
 
 function taskForm() {
   const weekdayNames = ['','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'];
-  const choices = state.lessons.map(lesson => ({
-    lesson,
-    lessonDate: nextLessonDate(lesson)
-  })).sort((a,b) => a.lessonDate.localeCompare(b.lessonDate) ||
-    String(a.lesson.startsAt).localeCompare(String(b.lesson.startsAt)));
-  if (!choices.length) {
+  const lessons = state.lessons.slice().sort((a,b) =>
+    Number(a.weekNumber) - Number(b.weekNumber) ||
+    Number(a.weekday) - Number(b.weekday) ||
+    String(a.startsAt).localeCompare(String(b.startsAt))
+  );
+  if (!lessons.length) {
     return '<section class="panel compose"><div><p class="eyebrow">НОВОЕ ЗАДАНИЕ</p><h2>' +
       (state.role === 'leader' ? 'Опубликовать ДЗ' : 'Предложить ДЗ') +
       '</h2><p class="muted">Сначала добавь пары в разделе «Расписание», затем привязывай к ним домашние задания.</p></div>' +
       '<p class="task-no-lessons">В расписании пока нет пар. <button class="text-btn" type="button" data-tab="schedule">Открыть расписание →</button></p></section>';
   }
-  const selected = choices[0];
-  const options = choices.map(({lesson,lessonDate}) =>
-    '<option value="' + esc(lesson.id) + '" data-subject="' + esc(lesson.subject) +
-    '" data-weekday="' + lesson.weekday + '" data-weekday-label="' + esc(weekdayNames[lesson.weekday] || '') +
-    '" data-lesson-date="' + lessonDate + '" data-week-number="' + lesson.weekNumber +
-    '" data-lesson-time="' + esc(lesson.startsAt || '') + '">' +
-    esc(weekdayNames[lesson.weekday] || 'День не указан') + ' · ' + esc(dateText(lessonDate)) +
-    ' · ' + esc(lesson.startsAt || '') + ' · ' + esc(lesson.subject) +
-    ' (' + (lesson.weekNumber === 2 ? 'II неделя' : 'I неделя') + ')</option>'
-  ).join('');
-  return '<section class="panel compose task-compose"><div><p class="eyebrow">НОВОЕ ЗАДАНИЕ</p><h2>' +
+
+  let selected = lessons.find(item => item.id === state.selectedTaskLessonId) || lessons[0];
+  state.selectedTaskLessonId = selected.id;
+  const selectedDate = nextLessonDate(selected);
+  const weekNames = {1:'Первая',2:'Вторая'};
+  const weeks = [1,2].map(week => {
+    const days = [1,2,3,4,5,6].map(day => {
+      const dayLessons = lessons.filter(item =>
+        Number(item.weekNumber) === week && Number(item.weekday) === day
+      );
+      const cards = dayLessons.length
+        ? dayLessons.map(lesson => {
+            const lessonDate = nextLessonDate(lesson);
+            const isSelected = lesson.id === selected.id;
+            return '<button type="button" class="task-lesson-option' + (isSelected ? ' selected' : '') +
+              '" data-action="select-task-lesson" data-id="' + esc(lesson.id) + '" aria-pressed="' + isSelected + '">' +
+              '<span class="task-lesson-time">' + esc(lesson.startsAt || '') +
+              (lesson.endsAt ? '–' + esc(lesson.endsAt) : '') + '</span>' +
+              '<strong>' + esc(lesson.subject) + '</strong>' +
+              '<small>' + esc(dateText(lessonDate)) + '</small>' +
+              (lesson.room ? '<small class="task-lesson-room">' + esc(lesson.room) + '</small>' : '') +
+              (isSelected ? '<span class="task-lesson-selected">Выбрано</span>' : '') +
+              '</button>';
+          }).join('')
+        : '<div class="task-lesson-day-empty">Нет пар</div>';
+      return '<article class="task-schedule-day"><header>' + weekdayNames[day] + '</header><div class="task-schedule-day-lessons">' + cards + '</div></article>';
+    }).join('');
+    return '<section class="task-schedule-week"><p class="eyebrow">' + weekNames[week] + ' УЧЕБНАЯ НЕДЕЛЯ</p><div class="task-schedule-grid">' + days + '</div></section>';
+  }).join('');
+
+  return '<section class="panel task-compose"><div class="task-compose-intro"><p class="eyebrow">НОВОЕ ЗАДАНИЕ</p><h2>' +
     (state.role === 'leader' ? 'Опубликовать ДЗ' : 'Предложить ДЗ') +
     '</h2><p class="muted">' +
-    (state.role === 'leader' ? 'Выбери пару из расписания — предмет, день и дата заполнятся автоматически.' : 'Выбери пару, к которой относится предложение. Староста увидит её дату и предмет.') +
-    '</p></div><form id="task-form" class="form task-form">' +
-    '<label>Пара из расписания<select id="task-lesson-select" name="lessonId" required>' + options + '</select></label>' +
-    '<div class="task-lesson-details">' +
-      '<label>Предмет<input name="subject" value="' + esc(selected.lesson.subject) + '" readonly></label>' +
-      '<label>День недели<input name="weekdayLabel" value="' + esc(weekdayNames[selected.lesson.weekday] || '') + '" readonly></label>' +
-      '<label>Дата пары<input name="lessonDate" type="date" value="' + selected.lessonDate + '" readonly></label>' +
-      '<label>Время<input name="lessonTime" value="' + esc(selected.lesson.startsAt || '') + '" readonly></label>' +
+    (state.role === 'leader' ? 'Нажми на нужную пару в расписании — она выделится, а её дата и предмет подставятся автоматически.' : 'Выбери пару в расписании, чтобы привязать к ней своё предложение.') +
+    '</p></div>' +
+    '<form id="task-form" class="form task-form">' +
+    '<div class="task-schedule-picker"><div class="task-schedule-picker-head"><strong>Выбери пару</strong><span>Нажми на карточку занятия</span></div>' + weeks + '</div>' +
+    '<input type="hidden" name="lessonId" value="' + esc(selected.id) + '">' +
+    '<div class="task-selected-lesson">' +
+      '<div class="task-selected-lesson-head"><span>ВЫБРАННАЯ ПАРА</span><b>✓</b></div>' +
+      '<div class="task-selected-lesson-details">' +
+        '<div><small>Предмет</small><strong data-selected-subject>' + esc(selected.subject) + '</strong></div>' +
+        '<div><small>День недели</small><strong data-selected-weekday>' + esc(weekdayNames[selected.weekday] || '') + '</strong></div>' +
+        '<div><small>Дата пары</small><strong data-selected-date>' + esc(dateText(selectedDate)) + '</strong></div>' +
+        '<div><small>Время</small><strong data-selected-time>' + esc(selected.startsAt || '') + (selected.endsAt ? '–' + esc(selected.endsAt) : '') + '</strong></div>' +
+      '</div>' +
+      '<input type="hidden" name="lessonDate" value="' + selectedDate + '">' +
+      '<input type="hidden" name="subject" value="' + esc(selected.subject) + '">' +
+      '<input type="hidden" name="weekday" value="' + Number(selected.weekday) + '">' +
+      '<input type="hidden" name="weekNumber" value="' + Number(selected.weekNumber) + '">' +
+      '<input type="hidden" name="lessonTime" value="' + esc(selected.startsAt || '') + '">' +
     '</div>' +
     '<label>Название задания<input name="title" required maxlength="180" placeholder="Что нужно сделать?"></label>' +
     '<label>Описание<textarea name="description" rows="3" placeholder="Дополнительные требования, страницы, вопросы…"></textarea></label>' +
@@ -645,6 +676,39 @@ function bindEvents() {
       renderWorkspace();
       return;
     }
+    if (button.dataset.action === 'select-task-lesson') {
+      const lesson = state.lessons.find(item => item.id === button.dataset.id);
+      const form = root.querySelector('#task-form');
+      if (!lesson || !form) return;
+      state.selectedTaskLessonId = lesson.id;
+      const weekdayNames = ['','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'];
+      const lessonDate = nextLessonDate(lesson);
+      form.elements.lessonId.value = lesson.id;
+      form.elements.lessonDate.value = lessonDate;
+      form.elements.subject.value = lesson.subject || '';
+      form.elements.weekday.value = Number(lesson.weekday);
+      form.elements.weekNumber.value = Number(lesson.weekNumber);
+      form.elements.lessonTime.value = lesson.startsAt || '';
+      root.querySelector('[data-selected-subject]').textContent = lesson.subject || '';
+      root.querySelector('[data-selected-weekday]').textContent = weekdayNames[lesson.weekday] || '';
+      root.querySelector('[data-selected-date]').textContent = dateText(lessonDate);
+      root.querySelector('[data-selected-time]').textContent = (lesson.startsAt || '') + (lesson.endsAt ? '–' + lesson.endsAt : '');
+      root.querySelectorAll('.task-lesson-option').forEach(option => {
+        const selectedOption = option.dataset.id === lesson.id;
+        option.classList.toggle('selected', selectedOption);
+        option.setAttribute('aria-pressed', String(selectedOption));
+        const selectedLabel = option.querySelector('.task-lesson-selected');
+        if (selectedOption && !selectedLabel) {
+          const label = document.createElement('span');
+          label.className = 'task-lesson-selected';
+          label.textContent = 'Выбрано';
+          option.append(label);
+        } else if (!selectedOption && selectedLabel) {
+          selectedLabel.remove();
+        }
+      });
+      return;
+    }
     if (button.dataset.action === 'delete-lesson') return deleteLesson(button.dataset.id);
     if (button.dataset.action === 'copy-code') {
       try { await navigator.clipboard.writeText(state.activeMembership.inviteCode); notify('Код скопирован.', 'success'); }
@@ -668,17 +732,6 @@ function bindEvents() {
   });
 
   root.addEventListener('change', async event => {
-    if (event.target.id === 'task-lesson-select') {
-      const form = event.target.closest('#task-form');
-      const option = event.target.selectedOptions[0];
-      if (form && option) {
-        form.elements.subject.value = option.dataset.subject || '';
-        form.elements.weekdayLabel.value = option.dataset.weekdayLabel || '';
-        form.elements.lessonDate.value = option.dataset.lessonDate || '';
-        form.elements.lessonTime.value = option.dataset.lessonTime || '';
-      }
-      return;
-    }
     if (event.target.matches('[data-progress]')) return updateProgress(event.target);
     if (event.target.id === 'attendance-date' && event.target.value) {
       state.attendanceDate = event.target.value;
