@@ -776,7 +776,6 @@ async function saveAttendance(lessonId, response) {
         status,
         reason: 'Автоматическая отметка по ответу студента',
         source: 'student_response',
-        source: 'leader',
         markedBy: state.user.uid,
         markedAt: serverTimestamp(),
         updatedAt: serverTimestamp()
@@ -880,6 +879,7 @@ async function saveOfficialAttendance(studentId, lessonId, status) {
         lessonDate: state.attendanceDate,
         status,
         reason: status === 'excused' ? 'Уважительная причина' : '',
+        source: 'leader',
         markedBy: state.user.uid,
         markedAt: serverTimestamp(),
         updatedAt: serverTimestamp()
