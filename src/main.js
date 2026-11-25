@@ -571,14 +571,26 @@ function materialDateLabel(value) {
     : 'Дата не указана';
 }
 
+function safeMaterialUrl(value) {
+  try {
+    const url = new URL(String(value || ''));
+    return ['https:', 'http:'].includes(url.protocol) ? url.href : '';
+  } catch {
+    return '';
+  }
+}
+
 function renderMaterialItem(item) {
   const isFile = item.kind === 'file' || Boolean(item.storagePath);
+  const safeUrl = safeMaterialUrl(item.externalUrl);
   const detail = isFile
     ? [item.fileName || 'Файл', item.size ? (item.size / 1024 / 1024).toFixed(1).replace('.', ',') + ' МБ' : 'Файл'].join(' · ')
     : (item.externalUrl || 'Внешняя ссылка');
   const action = isFile
     ? '<button type="button" class="btn ghost material-open" data-action="download-material" data-id="' + esc(item.id) + '">Скачать</button>'
-    : '<a class="btn ghost material-open" href="' + esc(item.externalUrl) + '" target="_blank" rel="noopener noreferrer">Открыть ссылку ↗</a>';
+    : (safeUrl
+      ? '<a class="btn ghost material-open" href="' + esc(safeUrl) + '" target="_blank" rel="noopener noreferrer">Открыть ссылку ↗</a>'
+      : '<span class="material-invalid-link">Некорректная ссылка</span>');
   return '<article class="material-row"><span class="material-icon">' + (isFile ? '↧' : '↗') + '</span>' +
     '<div class="material-copy"><strong>' + esc(item.title) + '</strong>' +
     '<small>' + esc(detail) + ' · ' + materialDateLabel(item.createdAt) + '</small>' +
