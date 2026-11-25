@@ -1,6 +1,6 @@
 import './style.css';
 import { downloadAttendanceReport } from './attendance-report.js';
-import { auth, db, storage, firebaseConfigured } from './firebase.js';
+import { auth, db, firebaseConfigured } from './firebase.js';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -28,7 +28,6 @@ import {
   where,
   writeBatch
 } from 'firebase/firestore';
-import { deleteObject, getBytes, ref as storageRef, uploadBytes } from 'firebase/storage';
 
 const root = document.querySelector('#app');
 const normalizeUsername = value => String(value ?? '').trim().toLowerCase();
@@ -294,7 +293,7 @@ function frame(html) {
 }
 
 function renderSetup() {
-  frame('<main class="setup"><div class="monogram">S</div><p class="eyebrow">НАСТРОЙКА FIREBASE</p><h1>STUDIUM</h1><p class="muted">Подключи Firebase, чтобы запустить учебное пространство.</p><article class="panel"><h2>Добавь параметры Web App</h2><ol><li>Создай отдельный проект в <a href="https://console.firebase.google.com/" target="_blank" rel="noreferrer">Firebase Console</a>.</li><li>Добавь Web App и скопируй значения Firebase config.</li><li>Включи Authentication → Sign-in method → Email/Password.</li><li>Создай базу Firestore в Production mode.</li><li>Включи Firebase Storage и создай bucket.</li><li>Создай локальный файл <code>.env</code> на основе <code>.env.example</code> и укажи Storage bucket.</li><li>Опубликуй правила Firestore, Storage и индексы из файлов проекта.</li></ol><p class="notice">Firebase Web config и apiKey идентифицируют приложение, но не заменяют защиту данных. Безопасность обеспечивают опубликованные Firestore Security Rules. Не добавляй Admin SDK private key в браузер или GitHub.</p></article></main>');
+  frame('<main class="setup"><div class="monogram">S</div><p class="eyebrow">НАСТРОЙКА FIREBASE</p><h1>STUDIUM</h1><p class="muted">Подключи Firebase, чтобы запустить учебное пространство.</p><article class="panel"><h2>Добавь параметры Web App</h2><ol><li>Создай отдельный проект в <a href="https://console.firebase.google.com/" target="_blank" rel="noreferrer">Firebase Console</a>.</li><li>Добавь Web App и скопируй значения Firebase config.</li><li>Включи Authentication → Sign-in method → Email/Password.</li><li>Создай базу Firestore в Production mode.</li><li>Хранилище файлов использует бесплатную квоту Cloud Firestore.</li><li>Создай локальный файл <code>.env</code> на основе <code>.env.example</code> и заполни параметры Firebase.</li><li>Опубликуй правила Firestore, Storage и индексы из файлов проекта.</li></ol><p class="notice">Firebase Web config и apiKey идентифицируют приложение, но не заменяют защиту данных. Безопасность обеспечивают опубликованные Firestore Security Rules. Не добавляй Admin SDK private key в браузер или GitHub.</p></article></main>');
 }
 
 function renderAuth(mode = 'login', message = '') {
@@ -636,9 +635,34 @@ function validateMaterialFile(file) {
   if (!file.size) throw new Error('Файл пустой.');
 }
 
+function encodeMaterialChunk(bytes) {
+  let binary = '';
+  const blockSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += blockSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + blockSize));
+  }
+  return btoa(binary);
+}
+
+function decodeMaterialChunk(value) {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return bytes;
+}
+
+async function removeMaterialChunks(groupId, materialId) {
+  const chunksRef = collection(db, 'groups', groupId, 'materialFiles', materialId, 'chunks');
+  const snapshot = await getDocs(chunksRef);
+  if (!snapshot.empty) {
+    const batch = writeBatch(db);
+    snapshot.docs.forEach(chunk => batch.delete(chunk.ref));
+    await batch.commit();
+  }
+}
+
 async function uploadGroupMaterial(form) {
   if (state.role !== 'leader') return notify('Добавлять материалы может только староста.', 'error');
-  if (!storage) return notify('Firebase Storage не настроен. Проверь VITE_FIREBASE_STORAGE_BUCKET и включи Storage в Firebase Console.', 'error');
   const data = new FormData(form);
   const file = data.get('file');
   const title = String(data.get('title') || '').trim();
@@ -654,19 +678,30 @@ async function uploadGroupMaterial(form) {
   if (!contentType) return notify('Не удалось определить тип файла.', 'error');
 
   setBusy(true);
-  const materialRef = doc(collection(db, 'groups', state.group.id, 'materials'));
-  const safeName = file.name.replace(/[\\/]/g, '_').replace(/[^\p{L}\p{N}._ -]/gu, '_').slice(0, 140) || 'file';
-  const path = 'groups/' + state.group.id + '/materials/' + materialRef.id + '/' + safeName;
+  const groupId = state.group.id;
+  const materialRef = doc(collection(db, 'groups', groupId, 'materials'));
+  const chunksRef = collection(db, 'groups', groupId, 'materialFiles', materialRef.id, 'chunks');
+  const chunkSize = 360 * 1024;
+  const chunkCount = Math.ceil(file.size / chunkSize);
   let metadataSaved = false;
   try {
-    await uploadBytes(storageRef(storage, path), file, {
-      contentType,
-      customMetadata: { uploadedBy: state.user.uid }
-    });
+    const fileBytes = new Uint8Array(await file.arrayBuffer());
+    for (let index = 0; index < chunkCount; index += 1) {
+      const chunk = fileBytes.subarray(index * chunkSize, Math.min((index + 1) * chunkSize, fileBytes.length));
+      await setDoc(doc(chunksRef, String(index).padStart(4, '0')), {
+        index,
+        data: encodeMaterialChunk(chunk),
+        createdBy: state.user.uid,
+        createdAt: serverTimestamp()
+      });
+    }
+
     await setDoc(materialRef, {
       title, description, kind: 'file', fileName: file.name,
-      contentType,
-      size: file.size, storagePath: path,
+      contentType, size: file.size,
+      fileStorage: 'firestore-chunks',
+      fileId: materialRef.id,
+      chunkCount,
       createdBy: state.user.uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp()
     });
     metadataSaved = true;
@@ -680,10 +715,11 @@ async function uploadGroupMaterial(form) {
     }
   } catch (error) {
     if (!metadataSaved) {
-      try { await deleteObject(storageRef(storage, path)); } catch {}
+      try { await removeMaterialChunks(groupId, materialRef.id); }
+      catch (cleanupError) { console.error('STUDIUM partial material cleanup failed:', cleanupError); }
     }
     console.error('STUDIUM material upload failed:', error);
-    notify(error.message || 'Не удалось загрузить файл. Проверь настройки Firebase Storage и правила доступа.', 'error');
+    notify(error.message || 'Не удалось сохранить файл в Firestore. Проверь правила доступа и свободную квоту.', 'error');
   } finally {
     setBusy(false);
   }
@@ -724,10 +760,20 @@ async function addGroupMaterialLink(form) {
 
 async function openGroupMaterial(materialId) {
   const item = state.materials.find(material => material.id === materialId);
-  if (!item?.storagePath || !storage) return notify('Файл не найден.', 'error');
+  if (!item?.fileId || item.fileStorage !== 'firestore-chunks') return notify('Файл не найден.', 'error');
   setBusy(true);
   try {
-    const bytes = await getBytes(storageRef(storage, item.storagePath), 20 * 1024 * 1024);
+    const chunksRef = collection(db, 'groups', state.group.id, 'materialFiles', item.fileId, 'chunks');
+    const snapshot = await getDocs(chunksRef);
+    if (snapshot.empty || snapshot.size !== item.chunkCount) throw new Error('Не все части файла найдены.');
+    const chunks = snapshot.docs
+      .map(document => ({ index: document.data().index, data: document.data().data }))
+      .sort((a, b) => a.index - b.index);
+    const decoded = chunks.map(chunk => decodeMaterialChunk(chunk.data));
+    const totalSize = decoded.reduce((sum, chunk) => sum + chunk.length, 0);
+    const bytes = new Uint8Array(totalSize);
+    let offset = 0;
+    decoded.forEach(chunk => { bytes.set(chunk, offset); offset += chunk.length; });
     const blob = new Blob([bytes], { type: item.contentType || 'application/octet-stream' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -751,11 +797,8 @@ async function deleteGroupMaterial(materialId) {
   if (!window.confirm('Удалить материал «' + item.title + '»?')) return;
   setBusy(true);
   try {
-    if (item.storagePath && storage) {
-      try { await deleteObject(storageRef(storage, item.storagePath)); }
-      catch (error) {
-        if (error.code !== 'storage/object-not-found') throw error;
-      }
+    if (item.fileStorage === 'firestore-chunks' && item.fileId) {
+      await removeMaterialChunks(state.group.id, item.fileId);
     }
     await deleteDoc(doc(db, 'groups', state.group.id, 'materials', materialId));
     notify('Материал удалён.', 'success');
