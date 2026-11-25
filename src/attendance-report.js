@@ -16,7 +16,7 @@ const schedulePeriods = [
 ];
 
 function normalizeDate(value) {
-  if (typeof value === 'string' && /^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return value;
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
   if (value && typeof value.toDate === 'function') {
     const date = value.toDate();
     return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('-');
@@ -41,7 +41,7 @@ function lessonCategory(lesson) {
 
 function cleanSubject(value) {
   return String(value || 'Без названия').replace(
-    /\\s*[·—-]\\s*(лекция|семинар|практика|практическое занятие|лабораторная работа)\\s*$/iu,
+    /\s*[·—-]\s*(лекция|семинар|практика|практическое занятие|лабораторная работа)\s*$/iu,
     ''
   ).trim();
 }
@@ -72,6 +72,7 @@ function attendanceEvents(records, lessonsById) {
     const partRecords = new Map(items.filter(item => item.partKey).map(item => [item.partKey, item]));
 
     if (partRecords.size === 0 && legacy) {
+      if (!['absent', 'excused'].includes(legacy.status)) return;
       events.push({
         studentId: legacy.studentId,
         lessonId: lesson.id,
@@ -340,7 +341,7 @@ export async function downloadAttendanceReport({ month, groupName, leaderName, m
   });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
-  const safeGroupName = String(groupName || 'group').replace(/[\\/:*?"<>|]+/g, '-').replace(/\\s+/g, '_');
+  const safeGroupName = String(groupName || 'group').replace(/[\/\\:*?"<>|]+/g, '-').replace(/\s+/g, '_');
   anchor.href = url;
   anchor.download = 'Явка_' + safeGroupName + '_' + month + '.xlsx';
   document.body.appendChild(anchor);
