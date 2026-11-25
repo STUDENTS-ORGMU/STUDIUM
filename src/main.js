@@ -949,6 +949,7 @@ function scheduleLessonCard(lesson, startIndex, span) {
     '" role="button" tabindex="0" aria-pressed="' + selected + '" aria-label="Показать задания: ' + esc(lesson.subject) + '">' +
     '<div class="schedule-times">' + times + '</div>' +
     '<strong>' + esc(lesson.subject) + '</strong>' +
+     '<span class="schedule-lesson-type-label">' + (lesson.lessonType === 'seminar' ? 'Семинар' : 'Лекция') + '</span>' +
     (lesson.room ? '<small class="schedule-room">' + esc(lesson.room) + '</small>' : '') +
     (lesson.description ? '<p class="schedule-description">' + esc(lesson.description) + '</p>' : '') +
     '<small class="schedule-task-hint">' + (selected ? 'Задания выбраны ниже' : 'Нажми, чтобы увидеть ДЗ') + '</small>' +
