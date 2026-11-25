@@ -1,111 +1,128 @@
 # STUDIUM
 
-STUDIUM — отдельная платформа для учебных групп. Проект создаётся с нуля на Vite, Vanilla JavaScript и Supabase. 
+STUDIUM — отдельная платформа для учебных групп. Проект создаётся с нуля на Vite, Vanilla JavaScript и Firebase.
 
 ## Возможности текущего MVP
 
-- Регистрация и вход по email/паролю через Supabase Auth.
-- Профиль пользователя.
+- Регистрация и вход по email/паролю через Firebase Authentication.
+- Профиль пользователя в Cloud Firestore.
 - Создание нескольких учебных групп и вступление по коду приглашения.
-- Роли `leader` (староста) и `student`.
+- Роли leader (староста) и student.
 - Публикация домашних заданий старостой.
 - Предложения домашних заданий студентами и модерация старостой.
 - Личные отметки о выполнении заданий.
 - Базовое расписание группы.
 - Предварительные ответы студентов о посещении пары.
-- Отдельная таблица официальной посещаемости, которую заполняет староста.
+- Отдельная модель официальной посещаемости, которую заполняет староста.
 
 ## Стек
 
 - Vite + Vanilla JavaScript
-- Supabase Auth
-- Supabase PostgreSQL
-- Row Level Security (RLS)
+- Firebase Authentication
+- Cloud Firestore
+- Firestore Security Rules
+- Firebase modular Web SDK
 - PWA shell cache через Service Worker
 
 ## Локальный запуск
 
 Требуется Node.js 20 или новее.
 
-```bash
-npm install
-cp .env.example .env
-```
+    npm install
+    cp .env.example .env
 
-Заполни `.env`:
+Заполни .env значениями Web App из Firebase Console:
 
-```dotenv
-VITE_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
-VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_PUBLISHABLE_OR_ANON_KEY
-```
+    VITE_FIREBASE_API_KEY=YOUR_FIREBASE_WEB_API_KEY
+    VITE_FIREBASE_AUTH_DOMAIN=YOUR_PROJECT_ID.firebaseapp.com
+    VITE_FIREBASE_PROJECT_ID=YOUR_PROJECT_ID
+    VITE_FIREBASE_STORAGE_BUCKET=YOUR_PROJECT_ID.firebasestorage.app
+    VITE_FIREBASE_MESSAGING_SENDER_ID=YOUR_MESSAGING_SENDER_ID
+    VITE_FIREBASE_APP_ID=YOUR_FIREBASE_APP_ID
 
 Запусти сервер разработки:
 
-```bash
-npm run dev
-```
+    npm run dev
 
-## Настройка Supabase
+## Создание Firebase-проекта
 
-1. Создай проект в [Supabase Dashboard](https://supabase.com/dashboard).
-2. Открой SQL Editor и выполни целиком `supabase/migrations/001_initial_schema.sql`.
-3. В Project Settings → API скопируй Project URL и publishable key (или legacy anon key) в локальный файл `.env`.
-4. В Authentication → URL Configuration укажи локальный URL разработки и URL будущего сайта в Site URL / Redirect URLs.
-5. В Authentication → Providers проверь, что включён Email provider.
+Для STUDIUM рекомендуется отдельный Firebase project, не тот, который использует старая «Явка». Это отделит пользовательские данные, правила доступа, настройки Authentication и квоты.
 
-**Никогда не помещай `service_role` или secret key в браузерный код или GitHub.** Клиенту разрешён только publishable/anon key. Все права должны обеспечиваться RLS.
+1. Открой Firebase Console: https://console.firebase.google.com/ и создай проект STUDIUM.
+2. В Project settings → General добавь Web App и скопируй Firebase config в .env.
+3. Открой Authentication → Sign-in method и включи Email/Password.
+4. Открой Firestore Database и создай базу в Production mode.
+5. Опубликуй правила из firestore.rules через вкладку Firestore → Rules или командой firebase deploy --only firestore:rules.
+6. Опубликуй индексы из firestore.indexes.json командой firebase deploy --only firestore:indexes.
+7. Настрой Authentication → Settings → Authorized domains: добавь домен GitHub Pages и localhost для разработки.
+
+В корне есть firebase.json, поэтому Firebase CLI использует подготовленные файлы правил и индексов. Для CLI сначала выполни firebase login и firebase use --add, выбрав свой новый Firebase project.
+
+## GitHub Pages
+
+Workflow в .github/workflows/deploy.yml собирает приложение и публикует его в GitHub Pages. В Settings → Secrets and variables → Actions → Variables добавь:
+
+| Variable | Значение |
+|---|---|
+| VITE_FIREBASE_API_KEY | Web API key |
+| VITE_FIREBASE_AUTH_DOMAIN | PROJECT_ID.firebaseapp.com |
+| VITE_FIREBASE_PROJECT_ID | ID проекта |
+| VITE_FIREBASE_STORAGE_BUCKET | Bucket из Firebase config |
+| VITE_FIREBASE_MESSAGING_SENDER_ID | Messaging sender ID |
+| VITE_FIREBASE_APP_ID | App ID |
+
+Firebase Web config предназначен для идентификации Web App и сам по себе не защищает базу. Доступ ограничивают Firestore Security Rules. Не публикуй service account private key или Admin SDK credentials в клиентском проекте.
+
+## Модель Firestore
+
+    users/{uid}
+      groups/{groupId}                 # список групп текущего пользователя
+
+    groups/{groupId}
+      members/{uid}                    # роль и имя участника
+      tasks/{taskId}                   # опубликованные ДЗ
+      taskSuggestions/{suggestionId}   # предложения ДЗ на модерации
+      taskProgress/{taskId_uid}        # личная отметка выполнения
+      lessons/{lessonId}               # расписание
+      attendanceResponses/{responseId} # предварительные ответы студентов
+      attendanceRecords/{recordId}     # официальный журнал старосты
+      materials/{materialId}           # материалы группы
+      lectures/{lectureId}             # лекции
+
+    inviteCodes/{code}                 # разрешение кода приглашения в группу
+
+Предложение домашнего задания и публикация связаны одной Firestore transaction: при одобрении одновременно создаётся документ задания и обновляется статус предложения. Security Rules проверяют эту атомарную связь через getAfter().
+
+## Роли и безопасность
+
+- Студент читает опубликованные задания своей группы, создаёт только собственные предложения и меняет только собственный прогресс.
+- Староста публикует задания, рассматривает предложения и управляет расписанием.
+- Предварительные ответы о посещаемости и официальный журнал хранятся в разных коллекциях.
+- Официальные отметки доступны только старосте.
+- Код приглашения можно получить по известному коду; перечислить все коды правила не разрешают.
+- Не используй правила вида allow read, write: if request.auth != null для всей базы.
+
+Правила из firestore.rules — начальная версия модели безопасности. Перед запуском на реальной группе протестируй роли двух аккаунтов и отказ в доступе к чужой группе через Firebase Emulator Suite / Rules Playground.
 
 ## Начальная проверка
 
 1. Зарегистрируй первый аккаунт.
-2. Создай группу — создатель автоматически получает роль старосты.
+2. Создай группу — создатель автоматически становится старостой.
 3. Скопируй код приглашения в разделе управления группой.
 4. Зарегистрируй второй тестовый аккаунт в другом браузере или режиме инкогнито.
 5. Войди вторым аккаунтом и присоединись по коду.
 6. От имени студента предложи домашнее задание.
-7. Вернись в аккаунт старосты, открой модерацию и одобри предложение.
+7. Вернись в аккаунт старосты и одобри предложение в разделе «Модерация».
 8. Убедись, что опубликованное задание появилось у студента, а отметка выполнения меняется только у текущего пользователя.
-
-## Модель доступа
-
-- Студент читает опубликованные задания своей группы, создаёт только собственные предложения и изменяет только собственный прогресс.
-- Староста читает предложения своей группы и одобряет или отклоняет их через RPC `review_task_suggestion`.
-- Староста может публиковать задания и управлять расписанием.
-- Предварительные ответы о посещаемости хранятся в `attendance_responses`.
-- Официальные отметки хранятся отдельно в `attendance_records` и доступны старосте.
-- Вступление в группу выполняется через RPC, а не прямой вставкой членства из браузера.
-
-## Структура
-
-```text
-studium/
-├── .github/workflows/deploy.yml
-├── public/
-│   ├── manifest.webmanifest
-│   ├── studium-mark.svg
-│   └── sw.js
-├── src/
-│   ├── main.js
-│   └── style.css
-├── supabase/migrations/001_initial_schema.sql
-├── .env.example
-├── .gitignore
-├── index.html
-├── package.json
-└── vite.config.js
-```
 
 ## Что ещё предстоит
 
-Текущая версия — основа продукта, а не законченный production-релиз. Следующие этапы:
+Текущая версия — MVP-каркас, а не законченный production-релиз. Следующие этапы:
 
-1. Протестировать Auth, группы, роли и RLS на двух аккаунтах в реальном Supabase.
-2. Довести модерацию: редактирование старостой перед публикацией, комментарий при отклонении и журнал действий.
-3. Добавить Storage-вложения для предложений, заданий, материалов и лекций.
-4. Перенести полноценное расписание из `study-journal`.
-5. Перенести сбор ответов и журнал посещаемости из `yavka`, добавить статистику и экспорт Excel.
-6. Добавить календарь, уведомления, офлайн-стратегию и сборки Android/Windows.
-
-## Деплой
-
-GitHub Actions workflow в `.github/workflows/deploy.yml` собирает Vite-приложение и публикует его в GitHub Pages после включения Pages в настройках репозитория (Source: GitHub Actions). Для сборки в Actions добавь repository variable `VITE_SUPABASE_URL` и repository variable `VITE_SUPABASE_ANON_KEY`. Не добавляй secret/service_role key в клиентскую сборку.
+1. Подключить отдельный Firebase project, опубликовать rules и indexes, проверить два аккаунта.
+2. Протестировать правила через Emulator Suite и исправить замечания до приглашения реальной группы.
+3. Добавить редактирование предложения старостой, комментарии при отклонении и журнал модерации.
+4. Подключить Firebase Storage для вложений, материалов и лекций.
+5. Перенести полное расписание из study-journal.
+6. Перенести журнал явки из yavka, добавить экран официальных отметок, статистику и экспорт Excel.
+7. Добавить календарь дедлайнов, уведомления, realtime-подписки и сборки Android/Windows.
