@@ -1,0 +1,12 @@
+{
+  "name": "STUDIUM — учебное пространство",
+  "short_name": "STUDIUM",
+  "description": "Учебное пространство вашей группы",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f7f7f5",
+  "theme_color": "#111111",
+  "icons": [
+    { "src": "./studium-mark.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
