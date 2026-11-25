@@ -378,7 +378,42 @@ function taskForm() {
     return '<section class="task-schedule-week"><p class="eyebrow">' + weekNames[week] + ' УЧЕБНАЯ НЕДЕЛЯ</p><div class="task-schedule-grid">' + days + '</div></section>';
   }).join('');
 
-  return '<section class="panel task-compose"><div class="task-compose-intro"><p class="eyebrow">НОВОЕ ЗАДАНИЕ</p><h2>' +
+  const taskPickerStyles = `<style>
+.task-compose{display:block;margin-bottom:23px}
+.task-compose-intro{margin-bottom:18px}
+.task-compose-intro h2{font:700 22px Manrope,sans-serif;margin:3px 0 7px}
+.task-compose-intro p.muted{max-width:720px}
+.task-schedule-picker{border:1px solid var(--line);border-radius:14px;background:#fbfbfa;padding:14px;margin-bottom:17px}
+.task-schedule-picker-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:12px}
+.task-schedule-picker-head strong{font:700 15px Manrope,sans-serif}
+.task-schedule-picker-head span{font-size:10px;color:var(--muted)}
+.task-schedule-week+.task-schedule-week{margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.task-schedule-week>.eyebrow{margin-bottom:8px}
+.task-schedule-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;align-items:start}
+.task-schedule-day{min-width:0;background:#fff;border:1px solid var(--line);border-radius:10px;padding:9px}
+.task-schedule-day>header{font-size:11px;font-weight:700;margin-bottom:7px}
+.task-schedule-day-lessons{display:flex;flex-direction:column;gap:6px}
+.task-lesson-day-empty{border:1px dashed #e3e1e9;border-radius:7px;padding:9px;color:#b1afb9;font-size:10px}
+.task-lesson-option{width:100%;min-width:0;text-align:left;display:flex;flex-direction:column;align-items:flex-start;gap:4px;border:1px solid #e5e3ed;border-left:3px solid #8c7cf0;border-radius:8px;background:#f7f6fc;color:var(--ink);padding:8px 9px;transition:border-color .15s,background .15s,box-shadow .15s}
+.task-lesson-option:hover{border-color:#988bf1;background:#f1efff;box-shadow:0 2px 8px #7665ee12}
+.task-lesson-option.selected{border:1.5px solid #6f5dea;border-left:4px solid #6f5dea;background:#eeeaff;box-shadow:0 3px 12px #7665ee24}
+.task-lesson-time{font-size:9px;color:#77749a;font-weight:600}
+.task-lesson-option strong{font-size:11px;line-height:1.35;overflow-wrap:anywhere}
+.task-lesson-option>small{font-size:9px;color:#888}
+.task-lesson-option .task-lesson-room{color:#666}
+.task-lesson-selected{align-self:flex-end;font-size:8px;font-weight:800;color:#fff;background:#6657df;border-radius:999px;padding:3px 7px}
+.task-selected-lesson{border:1px solid #dcd7ff;background:#f8f7ff;border-radius:12px;padding:13px 15px;display:flex;flex-direction:column;gap:12px}
+.task-selected-lesson-head{display:flex;align-items:center;justify-content:space-between;color:#6b5bd5}
+.task-selected-lesson-head span{font-size:9px;letter-spacing:.16em;font-weight:800}
+.task-selected-lesson-head b{width:22px;height:22px;display:grid;place-items:center;background:#6b5bd5;color:#fff;border-radius:50%;font-size:12px}
+.task-selected-lesson-details{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.task-selected-lesson-details>div{min-width:0;display:flex;flex-direction:column;gap:4px}
+.task-selected-lesson-details small{font-size:9px;color:#888}
+.task-selected-lesson-details strong{font-size:11px;overflow-wrap:anywhere}
+@media(max-width:1100px){.task-schedule-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:680px){.task-schedule-grid{grid-template-columns:1fr}.task-selected-lesson-details{grid-template-columns:repeat(2,minmax(0,1fr))}.task-schedule-picker{padding:10px}.task-schedule-picker-head{align-items:flex-start;flex-direction:column;gap:4px}}
+</style>`;
+  return taskPickerStyles + '<section class="panel task-compose"><div class="task-compose-intro"><p class="eyebrow">НОВОЕ ЗАДАНИЕ</p><h2>' +
     (state.role === 'leader' ? 'Опубликовать ДЗ' : 'Предложить ДЗ') +
     '</h2><p class="muted">' +
     (state.role === 'leader' ? 'Нажми на нужную пару в расписании — она выделится, а её дата и предмет подставятся автоматически.' : 'Выбери пару в расписании, чтобы привязать к ней своё предложение.') +
