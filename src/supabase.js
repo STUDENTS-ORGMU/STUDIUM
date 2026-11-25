@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Supabase runs alongside Firebase during migration; application flows remain on Firebase.
+// Supabase is the sole authentication, database, and file-storage backend.
 const url = import.meta.env.VITE_SUPABASE_URL || '';
 const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
 
