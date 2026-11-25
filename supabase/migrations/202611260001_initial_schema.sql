@@ -25,7 +25,7 @@ create table if not exists public.invite_codes (
  created_by uuid references public.profiles(id) on delete set null,
  data jsonb not null default '{}'::jsonb, created_at timestamptz not null default now()
 );
--- Initial compatibility store for tasks, taskSuggestions, taskProgress, lessons,
+-- Shared JSONB record store for tasks, taskSuggestions, taskProgress, lessons,
 -- attendanceResponses, attendanceRecords, materials, lectures and future collections.
 create table if not exists public.group_records (
  group_id text not null references public.study_groups(id) on delete cascade,
