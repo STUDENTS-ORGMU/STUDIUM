@@ -14,7 +14,7 @@ export const query = (source, ...constraints) => ({ __query: true, source, const
 export const serverTimestamp = () => new Date().toISOString();
 
 const parse = path => path.split('/').filter(Boolean);
-const isRecord = p => p[0] === 'groups' && p.length === 3;
+const isRecord = p => p[0] === 'groups' && p.length >= 3 && !['members','materialFiles'].includes(p[2]);
 const recordInfo = p => ({ groupId: p[1], collection: p[2] });
 const snap = (id, data, documentRef) => ({ id, ref: documentRef, exists: () => data !== null, data: () => data });
 const fail = error => { if (error) throw error; };
