@@ -1007,7 +1007,6 @@ function renderScheduleDay(weekNumber, weekday, todayInfo, tomorrowInfo) {
                 '<label>Длительность<select name="periodCount">' + durationOptions + '</select></label>' +
                 '<label>Аудитория<input name="room" maxlength="60" placeholder="Ауд."></label>' +
               '</div>' +
-              '<label>ДЗ / примечание<input name="description" maxlength="220" placeholder="Что подготовить"></label>' +
               '<div class="schedule-inline-actions"><button class="btn primary" type="submit">Сохранить</button><button class="btn ghost" type="button" data-action="cancel-lesson-cell">Отмена</button></div>' +
             '</form>' +
           '</div>'
@@ -2052,7 +2051,7 @@ async function submitLesson(form) {
       endsAt: endPeriod.end,
       periodCount,
       room: String(values.room || '').trim(),
-      description: String(values.description || '').trim(),
+      description: '',
       createdBy: state.user.uid,
       createdAt: serverTimestamp()
     });
