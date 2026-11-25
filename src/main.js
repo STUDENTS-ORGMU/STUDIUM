@@ -2311,9 +2311,9 @@ async function doSignOut() {
 function start() {
   bindEvents();
   if (!supabaseConfigured) return renderSetup();
-  supabase.auth.onAuthStateChange((_event, user) => {
+  supabase.auth.onAuthStateChange((_event, session) => {
     queueMicrotask(async () => {
-      try { await boot(user); }
+      try { await boot(session?.user ?? null); }
       catch (error) {
         console.error(error);
         renderAuth('login', 'Не удалось загрузить данные: ' + (error.message || 'неизвестная ошибка'));
