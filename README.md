@@ -4,7 +4,7 @@ STUDIUM — отдельная платформа для учебных груп
 
 ## Возможности текущего MVP
 
-- Регистрация и вход по email/паролю через Firebase Authentication.
+- Регистрация и вход по логину/паролю без ввода пользователем email. Внутри Firebase логин преобразуется в технический email-идентификатор проекта.
 - Профиль пользователя в Cloud Firestore.
 - Создание нескольких учебных групп и вступление по коду приглашения.
 - Роли leader (староста) и student.
@@ -50,7 +50,7 @@ STUDIUM — отдельная платформа для учебных груп
 
 1. Открой Firebase Console: https://console.firebase.google.com/ и создай проект STUDIUM.
 2. В Project settings → General добавь Web App и скопируй Firebase config в .env.
-3. Открой Authentication → Sign-in method и включи Email/Password.
+3. Открой Authentication → Sign-in method и включи Email/Password. Этот провайдер остаётся включённым, хотя в интерфейсе пользователь вводит логин, а не email.
 4. Открой Firestore Database и создай базу в Production mode.
 5. Опубликуй правила из firestore.rules через вкладку Firestore → Rules или командой firebase deploy --only firestore:rules.
 6. Опубликуй индексы из firestore.indexes.json командой firebase deploy --only firestore:indexes.
@@ -72,6 +72,10 @@ Workflow в .github/workflows/deploy.yml собирает приложение �
 | VITE_FIREBASE_APP_ID | App ID |
 
 Firebase Web config предназначен для идентификации Web App и сам по себе не защищает базу. Доступ ограничивают Firestore Security Rules. Не публикуй service account private key или Admin SDK credentials в клиентском проекте.
+
+## Вход по логину
+
+Пользователь указывает уникальный логин (3–24 символа: латинские буквы, цифры, точка, дефис или подчёркивание) и пароль. Для совместимости со стандартным Firebase Email/Password SDK приложение преобразует логин в детерминированный технический идентификатор вида `<login>@studium-99b06.firebaseapp.com`. Пользователь не вводит реальную почту, и такой адрес не предназначен для получения писем. Поэтому стандартное восстановление пароля по email и подтверждение почты недоступны; до запуска реальной группы нужно добавить альтернативный процесс восстановления доступа. Не отключай Email/Password в Firebase Console — это используемый приложением провайдер.
 
 ## Модель Firestore
 
