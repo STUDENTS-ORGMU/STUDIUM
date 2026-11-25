@@ -651,8 +651,11 @@ function renderAttendanceRoster(lesson) {
     absent: members.filter(member => records.get(member.id)?.status === 'absent').length,
     excused: members.filter(member => records.get(member.id)?.status === 'excused').length
   };
-  const bulkButton = missed.length
-    ? '<button class="attendance-bulk-excuse" type="button" data-action="excuse-all-missed" data-lesson="' + esc(lesson.id) + '">Поставить «Уваж.» всем, кто ответил «Не буду» (' + missed.length + ')</button>'
+  const bulkButton = members.length
+    ? '<button class="attendance-bulk-present" type="button" data-action="mark-all-present" data-lesson="' + esc(lesson.id) + '">Всем поставить «Был» (' + members.length + ')</button>' +
+      (missed.length
+        ? '<button class="attendance-bulk-excuse" type="button" data-action="excuse-all-missed" data-lesson="' + esc(lesson.id) + '">Поставить «Уваж.» всем, кто ответил «Не буду» (' + missed.length + ')</button>'
+        : '')
     : '';
 
   const rows = members.map(member => {
@@ -895,6 +898,45 @@ async function saveOfficialAttendance(studentId, lessonId, status) {
   }
 }
 
+async function markAllPresent(lessonId) {
+  if (state.role !== 'leader') return;
+  const members = state.groupMembers || [];
+  if (!members.length) {
+    notify('В группе пока нет участников.');
+    return;
+  }
+  if (!window.confirm('Поставить отметку «Был» всем ' + members.length + ' участникам группы на эту пару? Текущие отметки будут заменены.')) return;
+
+  setBusy(true);
+  try {
+    for (let offset = 0; offset < members.length; offset += 450) {
+      const batch = writeBatch(db);
+      members.slice(offset, offset + 450).forEach(member => {
+        const studentId = member.id || member.userId;
+        batch.set(attendanceRecordRef(lessonId, studentId), {
+          studentId,
+          lessonId,
+          lessonDate: state.attendanceDate,
+          status: 'present',
+          reason: '',
+          source: 'leader',
+          markedBy: state.user.uid,
+          markedAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+      });
+      await batch.commit();
+    }
+    notify('Всем ' + members.length + ' участникам выставлена отметка «Был».', 'success');
+    await loadWorkspace();
+    renderWorkspace();
+  } catch (error) {
+    notify(error.message || 'Не удалось отметить всех присутствующими.', 'error');
+  } finally {
+    setBusy(false);
+  }
+}
+
 async function excuseMissedStudents(lessonId, onlyStudentId = null) {
   if (state.role !== 'leader') return;
   const missing = state.attendance.filter(item =>
@@ -979,6 +1021,7 @@ function bindEvents() {
       const status = current?.status === button.dataset.officialStatus ? '' : button.dataset.officialStatus;
       return saveOfficialAttendance(button.dataset.student, button.dataset.lesson, status);
     }
+    if (button.dataset.action === 'mark-all-present') return markAllPresent(button.dataset.lesson);
     if (button.dataset.action === 'excuse-all-missed') return excuseMissedStudents(button.dataset.lesson);
     if (button.dataset.attendance) return saveAttendance(button.dataset.lesson, button.dataset.attendance);
 
