@@ -24,7 +24,7 @@ service cloud.firestore {
     }
 
     match /usernameAliases/{username} {
-      // Single-document lookup for login. authEmail is an internal Firebase alias, not a real mailbox.
+      // Login lookup is a single-document get only. authEmail is an internal Firebase alias.
       allow get: if true;
       allow list: if false;
       allow create: if signedIn()
@@ -35,8 +35,9 @@ service cloud.firestore {
         && request.resource.data.authEmail == request.auth.token.email;
       allow update: if signedIn()
         && resource.data.authEmail == request.auth.token.email
+        && request.resource.data.authEmail == resource.data.authEmail
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['disabled'])
-        && request.resource.data.disabled == true;
+        && request.resource.data.disabled is bool;
       allow delete: if false;
     }
 
