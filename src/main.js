@@ -257,10 +257,14 @@ async function loadMemberships() {
     .select('group_id, role, display_name, joined_at, study_groups(id, name)')
     .eq('user_id', state.user.id);
   if (error) throw error;
+  const { data: inviteRows, error: inviteError } = await supabase.rpc('get_my_group_invite_codes');
+  if (inviteError) throw inviteError;
+  const inviteByGroup = new Map((inviteRows || []).map(item => [item.group_id, item.code]));
   state.memberships = (data || []).map(item => ({
     id: item.group_id, groupId: item.group_id, role: item.role,
     name: item.study_groups?.name || 'Учебная группа',
-    inviteCode: null, joinedAt: item.joined_at
+    inviteCode: item.role === 'leader' ? (inviteByGroup.get(item.group_id) || null) : null,
+    joinedAt: item.joined_at
   }));
 }
 
