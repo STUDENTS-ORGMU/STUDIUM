@@ -534,14 +534,10 @@ function decodeMaterialChunk(value) {
   return bytes;
 }
 
-async function removeMaterialChunks(groupId, materialId) {
-  const chunksRef = collection(db, 'groups', groupId, 'materialFiles', materialId, 'chunks');
-  const snapshot = await getDocs(chunksRef);
-  if (!snapshot.empty) {
-    const batch = writeBatch(db);
-    snapshot.docs.forEach(chunk => batch.delete(chunk.ref));
-    await batch.commit();
-  }
+async function removeMaterialChunks(groupId, materialId, storagePath = '') {
+  const path = storagePath || `${groupId}/${materialId}`;
+  const { error } = await supabase.storage.from('group-materials').remove([path]);
+  if (error) throw error;
 }
 
 async function uploadGroupMaterial(form) {
@@ -554,58 +550,26 @@ async function uploadGroupMaterial(form) {
   if (!title || title.length > 180) return notify('Укажи название до 180 символов.', 'error');
   if (description.length > 1000) return notify('Описание слишком длинное.', 'error');
   try { validateMaterialFile(file); } catch (error) { return notify(error.message, 'error'); }
-
-  const mimeByExtension = { pdf: 'application/pdf', doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', ppt: 'application/vnd.ms-powerpoint', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', txt: 'text/plain', rtf: 'application/rtf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', zip: 'application/zip' };
-  const extension = file.name.split('.').pop().toLowerCase();
-  const contentType = file.type || mimeByExtension[extension] || '';
-  if (!contentType) return notify('Не удалось определить тип файла.', 'error');
-
   setBusy(true);
-  const groupId = state.group.id;
-  const materialRef = doc(collection(db, 'groups', groupId, 'materials'));
-  const chunksRef = collection(db, 'groups', groupId, 'materialFiles', materialRef.id, 'chunks');
-  const chunkSize = 360 * 1024;
-  const chunkCount = Math.ceil(file.size / chunkSize);
-  let metadataSaved = false;
+  const materialId = crypto.randomUUID();
+  const storagePath = `${state.group.id}/${materialId}/${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
   try {
-    const fileBytes = new Uint8Array(await file.arrayBuffer());
-    for (let index = 0; index < chunkCount; index += 1) {
-      const chunk = fileBytes.subarray(index * chunkSize, Math.min((index + 1) * chunkSize, fileBytes.length));
-      await setDoc(doc(chunksRef, String(index).padStart(4, '0')), {
-        index,
-        data: encodeMaterialChunk(chunk),
-        createdBy: state.user.uid,
-        createdAt: serverTimestamp()
-      });
-    }
-
-    await setDoc(materialRef, {
-      title, description, kind: 'file', fileName: file.name,
-      contentType, size: file.size,
-      fileStorage: 'firestore-chunks',
-      fileId: materialRef.id,
-      chunkCount,
-      createdBy: state.user.uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+    const { error: uploadError } = await supabase.storage.from('group-materials')
+      .upload(storagePath, file, { contentType: file.type || 'application/octet-stream', upsert: false });
+    if (uploadError) throw uploadError;
+    await setDoc(doc(collection(db, 'groups', state.group.id, 'materials'), materialId), {
+      title, description, kind: 'file', fileName: file.name, contentType: file.type || 'application/octet-stream',
+      size: file.size, fileStorage: 'supabase-storage', storagePath, createdBy: state.user.uid,
+      createdAt: serverTimestamp(), updatedAt: serverTimestamp()
     });
-    metadataSaved = true;
-    try {
-      await loadWorkspace();
-      renderWorkspace();
-      notify('Файл добавлен в материалы группы.', 'success');
-    } catch (refreshError) {
-      console.error('STUDIUM material list refresh failed:', refreshError);
-      notify('Файл загружен. Обнови страницу, если он не появился в списке.', 'success');
-    }
+    await loadWorkspace();
+    renderWorkspace();
+    notify('Файл добавлен в материалы группы.', 'success');
   } catch (error) {
-    if (!metadataSaved) {
-      try { await removeMaterialChunks(groupId, materialRef.id); }
-      catch (cleanupError) { console.error('STUDIUM partial material cleanup failed:', cleanupError); }
-    }
+    try { await removeMaterialChunks(state.group.id, materialId, storagePath); } catch {}
     console.error('STUDIUM material upload failed:', error);
-    notify(error.message || 'Не удалось сохранить файл в Firestore. Проверь правила доступа и свободную квоту.', 'error');
-  } finally {
-    setBusy(false);
-  }
+    notify(error.message || 'Не удалось загрузить файл в Supabase Storage.', 'error');
+  } finally { setBusy(false); }
 }
 
 async function addGroupMaterialLink(form) {
@@ -643,34 +607,20 @@ async function addGroupMaterialLink(form) {
 
 async function openGroupMaterial(materialId) {
   const item = state.materials.find(material => material.id === materialId);
-  if (!item?.fileId || item.fileStorage !== 'firestore-chunks') return notify('Файл не найден.', 'error');
+  if (!item?.storagePath || item.fileStorage !== 'supabase-storage') return notify('Файл не найден.', 'error');
   setBusy(true);
   try {
-    const chunksRef = collection(db, 'groups', state.group.id, 'materialFiles', item.fileId, 'chunks');
-    const snapshot = await getDocs(chunksRef);
-    if (snapshot.empty || snapshot.size !== item.chunkCount) throw new Error('Не все части файла найдены.');
-    const chunks = snapshot.docs
-      .map(document => ({ index: document.data().index, data: document.data().data }))
-      .sort((a, b) => a.index - b.index);
-    const decoded = chunks.map(chunk => decodeMaterialChunk(chunk.data));
-    const totalSize = decoded.reduce((sum, chunk) => sum + chunk.length, 0);
-    const bytes = new Uint8Array(totalSize);
-    let offset = 0;
-    decoded.forEach(chunk => { bytes.set(chunk, offset); offset += chunk.length; });
-    const blob = new Blob([bytes], { type: item.contentType || 'application/octet-stream' });
-    const url = URL.createObjectURL(blob);
+    const { data, error } = await supabase.storage.from('group-materials').createSignedUrl(item.storagePath, 60);
+    if (error) throw error;
     const link = document.createElement('a');
-    link.href = url;
+    link.href = data.signedUrl;
     link.download = item.fileName || item.title || 'material';
+    link.target = '_blank';
     document.body.appendChild(link);
     link.click();
     link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
-  } catch (error) {
-    notify(error.message || 'Не удалось скачать файл.', 'error');
-  } finally {
-    setBusy(false);
-  }
+  } catch (error) { notify(error.message || 'Не удалось скачать файл.', 'error'); }
+  finally { setBusy(false); }
 }
 
 async function deleteGroupMaterial(materialId) {
@@ -680,8 +630,8 @@ async function deleteGroupMaterial(materialId) {
   if (!window.confirm('Удалить материал «' + item.title + '»?')) return;
   setBusy(true);
   try {
-    if (item.fileStorage === 'firestore-chunks' && item.fileId) {
-      await removeMaterialChunks(state.group.id, item.fileId);
+    if (item.fileStorage === 'supabase-storage' && item.storagePath) {
+      await removeMaterialChunks(state.group.id, item.id, item.storagePath);
     }
     await deleteDoc(doc(db, 'groups', state.group.id, 'materials', materialId));
     notify('Материал удалён.', 'success');
