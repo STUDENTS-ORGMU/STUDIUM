@@ -74,7 +74,7 @@ const state = {
   attendance: [],
   attendanceDate: today(),
   scheduleEditorSlot: null,
-  selectedTaskLessonId: null,
+  selectedScheduleLessonId: null,
   busy: false,
   authMode: 'login'
 };
@@ -281,9 +281,8 @@ function renderWorkspace() {
   const name = displayFullName(state.profile);
   const tabs = [
     navButton('overview', '⌂', 'Обзор'),
-    navButton('tasks', '✓', 'Домашние задания'),
+    navButton('schedule', '▦', 'Расписание и ДЗ'),
     ...(leader ? [navButton('moderation', '◇', 'Модерация <b>' + state.suggestions.filter(item => item.status === 'pending').length + '</b>')] : []),
-    navButton('schedule', '▦', 'Расписание'),
     navButton('attendance', '◷', 'Посещаемость'),
     navButton('library', '▤', 'Материалы'),
     navButton('manage', '⚙', 'Группа')
@@ -301,9 +300,8 @@ function empty(title, text) {
 }
 
 function renderCurrentTab() {
-  if (state.tab === 'tasks') return renderTasks();
+  if (state.tab === 'tasks' || state.tab === 'schedule') return renderSchedule();
   if (state.tab === 'moderation' && state.role === 'leader') return renderModeration();
-  if (state.tab === 'schedule') return renderSchedule();
   if (state.tab === 'attendance') return renderAttendance();
   if (state.tab === 'library') return heading('БИБЛИОТЕКА', 'Материалы', 'Методички, ссылки, презентации и лекции.') +
     '<div class="grid-two"><article class="panel"><h2>Материалы группы</h2><p class="muted">Подключение файлов через Firebase Storage — следующий этап.</p></article><article class="panel"><h2>Лекции</h2><p class="muted">Отдельная библиотека лекций будет подключена к Firestore и Storage.</p></article></div>';
@@ -335,114 +333,58 @@ function taskCards(items) {
   }).join('') + '</div>';
 }
 
-function taskForm() {
+function taskForm(lesson) {
+  if (!lesson) return '';
   const weekdayNames = ['','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'];
-  const lessons = state.lessons.slice().sort((a,b) =>
-    Number(a.weekNumber) - Number(b.weekNumber) ||
-    Number(a.weekday) - Number(b.weekday) ||
-    String(a.startsAt).localeCompare(String(b.startsAt))
-  );
-  if (!lessons.length) {
-    return '<section class="panel compose"><div><p class="eyebrow">НОВОЕ ЗАДАНИЕ</p><h2>' +
-      (state.role === 'leader' ? 'Опубликовать ДЗ' : 'Предложить ДЗ') +
-      '</h2><p class="muted">Сначала добавь пары в разделе «Расписание», затем привязывай к ним домашние задания.</p></div>' +
-      '<p class="task-no-lessons">В расписании пока нет пар. <button class="text-btn" type="button" data-tab="schedule">Открыть расписание →</button></p></section>';
-  }
-
-  const selected = lessons.find(item => item.id === state.selectedTaskLessonId) || null;
-  const selectedDate = selected ? nextLessonDate(selected) : '';
-  const weekNames = {1:'Первая',2:'Вторая'};
-  const weeks = [1,2].map(week => {
-    const days = [1,2,3,4,5,6].map(day => {
-      const dayLessons = lessons.filter(item =>
-        Number(item.weekNumber) === week && Number(item.weekday) === day
-      );
-      const cards = dayLessons.length
-        ? dayLessons.map(lesson => {
-            const lessonDate = nextLessonDate(lesson);
-            const isSelected = Boolean(selected && lesson.id === selected.id);
-            return '<button type="button" class="task-lesson-option' + (isSelected ? ' selected' : '') +
-              '" data-action="select-task-lesson" data-id="' + esc(lesson.id) + '" aria-pressed="' + isSelected + '">' +
-              '<span class="task-lesson-time">' + esc(lesson.startsAt || '') +
-              (lesson.endsAt ? '–' + esc(lesson.endsAt) : '') + '</span>' +
-              '<strong>' + esc(lesson.subject) + '</strong>' +
-              '<small>' + esc(dateText(lessonDate)) + '</small>' +
-              (lesson.room ? '<small class="task-lesson-room">' + esc(lesson.room) + '</small>' : '') +
-              (isSelected ? '<span class="task-lesson-selected">Выбрано</span>' : '') +
-              '</button>';
-          }).join('')
-        : '<div class="task-lesson-day-empty">Нет пар</div>';
-      return '<article class="task-schedule-day"><header>' + weekdayNames[day] + '</header><div class="task-schedule-day-lessons">' + cards + '</div></article>';
-    }).join('');
-    return '<section class="task-schedule-week"><p class="eyebrow">' + weekNames[week] + ' УЧЕБНАЯ НЕДЕЛЯ</p><div class="task-schedule-grid">' + days + '</div></section>';
-  }).join('');
-
-  const taskPickerStyles = `<style>
-.task-compose{display:block;margin-bottom:23px}
-.task-compose-intro{margin-bottom:18px}
-.task-compose-intro h2{font:700 22px Manrope,sans-serif;margin:3px 0 7px}
-.task-compose-intro p.muted{max-width:720px}
-.task-schedule-picker{border:1px solid var(--line);border-radius:14px;background:#fbfbfa;padding:14px;margin-bottom:17px}
-.task-schedule-picker-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:12px}
-.task-schedule-picker-head strong{font:700 15px Manrope,sans-serif}
-.task-schedule-picker-head span{font-size:10px;color:var(--muted)}
-.task-schedule-week+.task-schedule-week{margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
-.task-schedule-week>.eyebrow{margin-bottom:8px}
-.task-schedule-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;align-items:start}
-.task-schedule-day{min-width:0;background:#fff;border:1px solid var(--line);border-radius:10px;padding:9px}
-.task-schedule-day>header{font-size:11px;font-weight:700;margin-bottom:7px}
-.task-schedule-day-lessons{display:flex;flex-direction:column;gap:6px}
-.task-lesson-day-empty{border:1px dashed #e3e1e9;border-radius:7px;padding:9px;color:#b1afb9;font-size:10px}
-.task-lesson-option{width:100%;min-width:0;text-align:left;display:flex;flex-direction:column;align-items:flex-start;gap:4px;border:1px solid #e5e3ed;border-left:3px solid #8c7cf0;border-radius:8px;background:#f7f6fc;color:var(--ink);padding:8px 9px;transition:border-color .15s,background .15s,box-shadow .15s}
-.task-lesson-option:hover{border-color:#988bf1;background:#f1efff;box-shadow:0 2px 8px #7665ee12}
-.task-lesson-option.selected{border:1.5px solid #6f5dea;border-left:4px solid #6f5dea;background:#eeeaff;box-shadow:0 3px 12px #7665ee24}
-.task-lesson-time{font-size:9px;color:#77749a;font-weight:600}
-.task-lesson-option strong{font-size:11px;line-height:1.35;overflow-wrap:anywhere}
-.task-lesson-option>small{font-size:9px;color:#888}
-.task-lesson-option .task-lesson-room{color:#666}
-.task-lesson-selected{align-self:flex-end;font-size:8px;font-weight:800;color:#fff;background:#6657df;border-radius:999px;padding:3px 7px}
-.task-selected-lesson{border:1px solid #dcd7ff;background:#f8f7ff;border-radius:12px;padding:13px 15px;display:flex;flex-direction:column;gap:12px}
-.task-selected-lesson-head{display:flex;align-items:center;justify-content:space-between;color:#6b5bd5}
-.task-selected-lesson-head span{font-size:9px;letter-spacing:.16em;font-weight:800}
-.task-selected-lesson-head b{width:22px;height:22px;display:grid;place-items:center;background:#6b5bd5;color:#fff;border-radius:50%;font-size:12px}
-.task-selected-lesson-details{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
-.task-selected-lesson-details>div{min-width:0;display:flex;flex-direction:column;gap:4px}
-.task-selected-lesson-details small{font-size:9px;color:#888}
-.task-selected-lesson-details strong{font-size:11px;overflow-wrap:anywhere}
-@media(max-width:1100px){.task-schedule-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:680px){.task-schedule-grid{grid-template-columns:1fr}.task-selected-lesson-details{grid-template-columns:repeat(2,minmax(0,1fr))}.task-schedule-picker{padding:10px}.task-schedule-picker-head{align-items:flex-start;flex-direction:column;gap:4px}}
-</style>`;
-  return taskPickerStyles + '<section class="panel task-compose"><div class="task-compose-intro"><p class="eyebrow">НОВОЕ ЗАДАНИЕ</p><h2>' +
-    (state.role === 'leader' ? 'Опубликовать ДЗ' : 'Предложить ДЗ') +
-    '</h2><p class="muted">' +
-    (state.role === 'leader' ? 'Нажми на нужную пару в расписании — она выделится, а её дата и предмет подставятся автоматически.' : 'Выбери пару в расписании, чтобы привязать к ней своё предложение.') +
-    '</p></div>' +
+  const lessonDate = nextLessonDate(lesson);
+  const timeLabel = (lesson.startsAt || '') + (lesson.endsAt ? '–' + lesson.endsAt : '');
+  return '<section class="panel task-compose task-compose-inline"><div class="task-compose-intro">' +
+    '<p class="eyebrow">НОВОЕ TODO</p><h2>' + (state.role === 'leader' ? 'Опубликовать ДЗ к этой паре' : 'Предложить ДЗ к этой паре') + '</h2>' +
+    '<p class="muted">Домашнее задание будет прикреплено к выбранному занятию.</p></div>' +
+    '<div class="task-selected-lesson"><div class="task-selected-lesson-details">' +
+    '<div><small>Предмет</small><strong>' + esc(lesson.subject) + '</strong></div>' +
+    '<div><small>День</small><strong>' + esc(weekdayNames[lesson.weekday] || '') + '</strong></div>' +
+    '<div><small>Дата пары</small><strong>' + esc(dateText(lessonDate)) + '</strong></div>' +
+    '<div><small>Время</small><strong>' + esc(timeLabel) + '</strong></div>' +
+    '</div></div>' +
     '<form id="task-form" class="form task-form">' +
-    '<div class="task-schedule-picker"><div class="task-schedule-picker-head"><strong>Выбери пару</strong><span>Нажми на карточку занятия</span></div>' + weeks + '</div>' +
-    '<input type="hidden" name="lessonId" value="' + esc(selected?.id || '') + '">' +
-    '<div class="task-selected-lesson">' +
-      '<div class="task-selected-lesson-head"><span>ВЫБРАННАЯ ПАРА</span><b>✓</b></div>' +
-      '<p class="task-selected-placeholder' + (selected ? ' hidden' : '') + '" data-selected-placeholder>Нажми на занятие в расписании выше — здесь появятся предмет, день, дата и время.</p>' +
-      '<div class="task-selected-lesson-details">' +
-        '<div><small>Предмет</small><strong data-selected-subject>' + esc(selected?.subject || '—') + '</strong></div>' +
-        '<div><small>День недели</small><strong data-selected-weekday>' + esc(selected ? weekdayNames[selected.weekday] || '' : '—') + '</strong></div>' +
-        '<div><small>Дата пары</small><strong data-selected-date>' + esc(selected ? dateText(selectedDate) : '—') + '</strong></div>' +
-        '<div><small>Время</small><strong data-selected-time>' + esc(selected ? (selected.startsAt || '') + (selected.endsAt ? '–' + selected.endsAt : '') : '—') + '</strong></div>' +
-      '</div>' +
-      '<input type="hidden" name="lessonDate" value="' + selectedDate + '">' +
-      '<input type="hidden" name="subject" value="' + esc(selected?.subject || '') + '">' +
-      '<input type="hidden" name="weekday" value="' + (selected ? Number(selected.weekday) : '') + '">' +
-      '<input type="hidden" name="weekNumber" value="' + (selected ? Number(selected.weekNumber) : '') + '">' +
-      '<input type="hidden" name="lessonTime" value="' + esc(selected?.startsAt || '') + '">' +
-    '</div>' +
+    '<input type="hidden" name="lessonId" value="' + esc(lesson.id) + '">' +
+    '<input type="hidden" name="lessonDate" value="' + lessonDate + '">' +
+    '<input type="hidden" name="subject" value="' + esc(lesson.subject) + '">' +
+    '<input type="hidden" name="weekday" value="' + Number(lesson.weekday) + '">' +
+    '<input type="hidden" name="weekNumber" value="' + Number(lesson.weekNumber) + '">' +
+    '<input type="hidden" name="lessonTime" value="' + esc(lesson.startsAt || '') + '">' +
     '<label>Название задания<input name="title" required maxlength="180" placeholder="Что нужно сделать?"></label>' +
     '<label>Описание<textarea name="description" rows="3" placeholder="Дополнительные требования, страницы, вопросы…"></textarea></label>' +
-    '<button class="btn primary" type="submit" ' + (selected ? '' : 'disabled') + '>' + (state.role === 'leader' ? 'Опубликовать' : 'Отправить старосте') + '</button>' +
+    '<button class="btn primary" type="submit">' + (state.role === 'leader' ? 'Опубликовать' : 'Отправить старосте') + '</button>' +
     '</form></section>';
 }
 
+function renderTodoPanel() {
+  const selectedLesson = state.lessons.find(item => item.id === state.selectedScheduleLessonId) || null;
+  const visibleTasks = selectedLesson
+    ? state.tasks.filter(item => item.lessonId === selectedLesson.id)
+    : state.tasks;
+  const selectedName = selectedLesson
+    ? 'TODO · ' + selectedLesson.subject
+    : 'TODO · Все домашние задания';
+  const resetButton = selectedLesson
+    ? '<button class="btn ghost todo-reset" type="button" data-action="show-all-todos">Все задания</button>'
+    : '';
+  const pairLabel = selectedLesson
+    ? '<p class="muted todo-context">Показаны задания только к выбранной паре. Нажми другую пару выше, чтобы переключить список.</p>'
+    : '<p class="muted todo-context">Выбери пару в расписании выше, чтобы отфильтровать TODO по конкретному занятию. Пока показаны все задания группы.</p>';
+  const taskContent = visibleTasks.length
+    ? taskCards(visibleTasks)
+    : empty(selectedLesson ? 'К этой паре пока нет заданий' : 'Пока нет домашних заданий',
+        selectedLesson ? 'Староста может опубликовать ДЗ, а студент — предложить его.' : 'Домашние задания, привязанные к парам, появятся здесь.');
+  const compose = selectedLesson ? taskForm(selectedLesson) : '';
+  return '<section class="todo-section" id="todo-panel"><div class="todo-heading"><div><p class="eyebrow">ПОСЛЕ РАСПИСАНИЯ</p><h2>' + esc(selectedName) + '</h2></div>' + resetButton + '</div>' +
+    pairLabel + taskContent + compose + '</section>';
+}
+
 function renderTasks() {
-  return heading('УЧЕБНЫЙ ПРОЦЕСС', 'Домашние задания', 'Общий список группы и твой персональный прогресс.') + taskForm() + taskCards(state.tasks);
+  return renderSchedule();
 }
 
 function renderModeration() {
@@ -501,11 +443,15 @@ function scheduleLessonCard(lesson, startIndex, span) {
   const times = periods.map((period, index) =>
     '<span>' + period.start + '–' + period.end + (span > 1 ? ' · ' + period.label : '') + '</span>'
   ).join('');
-  return '<article class="schedule-lesson" style="grid-row:span ' + span + '">' +
+  const selected = state.selectedScheduleLessonId === lesson.id;
+  return '<article class="schedule-lesson' + (span > 1 ? ' double-period' : '') + (selected ? ' selected-lesson' : '') +
+    '" style="grid-row:span ' + span + '" data-schedule-lesson data-id="' + esc(lesson.id) +
+    '" role="button" tabindex="0" aria-pressed="' + selected + '" aria-label="Показать задания: ' + esc(lesson.subject) + '">' +
     '<div class="schedule-times">' + times + '</div>' +
     '<strong>' + esc(lesson.subject) + '</strong>' +
     (lesson.room ? '<small class="schedule-room">' + esc(lesson.room) + '</small>' : '') +
     (lesson.description ? '<p class="schedule-description">' + esc(lesson.description) + '</p>' : '') +
+    '<small class="schedule-task-hint">' + (selected ? 'Задания выбраны ниже' : 'Нажми, чтобы увидеть TODO') + '</small>' +
     (state.role === 'leader' ? '<button type="button" class="lesson-delete" title="Удалить пару" aria-label="Удалить пару" data-action="delete-lesson" data-id="' + esc(lesson.id) + '">×</button>' : '') +
     '</article>';
 }
@@ -618,9 +564,10 @@ function renderSchedule() {
     [1,2,3,4,5,6].map(day => renderScheduleDay(week, day, todayInfo, tomorrowInfo)).join('') +
     '</div></section>').join('');
   const hint = state.role === 'leader'
-    ? 'Наведись на свободную ячейку и нажми «＋ Добавить пару», чтобы заполнить её прямо в расписании.'
-    : 'Расписание занятий группы на первой и второй учебной неделе.';
-  return heading('РАСПИСАНИЕ', 'Расписание группы', hint) + weekSummary + weeks;
+    ? 'Нажми на пару, чтобы увидеть связанные с ней задания. Для добавления занятия наведи курсор на свободную ячейку.'
+    : 'Нажми на пару, чтобы увидеть домашние задания именно к этому занятию.';
+  return heading('УЧЕБНЫЙ ПРОЦЕСС', 'Расписание и домашние задания', hint) +
+    weekSummary + weeks + renderTodoPanel();
 }
 
 function lessonWeekFor(date) {
@@ -690,12 +637,24 @@ function renderManage() {
 
 function bindEvents() {
   root.addEventListener('click', async event => {
-    const button = event.target.closest('button');
+    const button = event.target.closest('button,[data-schedule-lesson]');
     if (!button) return;
     if (button.dataset.mode) return renderAuth(button.dataset.mode);
     if (button.dataset.tab) { state.tab = button.dataset.tab; return renderWorkspace(); }
     if (button.dataset.action === 'logout') return doSignOut();
     if (button.dataset.action === 'menu') { document.querySelector('.sidebar')?.classList.toggle('open'); return; }
+    if (button.dataset.scheduleLesson !== undefined) {
+      state.selectedScheduleLessonId = button.dataset.id;
+      renderWorkspace();
+      root.querySelector('#todo-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    if (button.dataset.action === 'show-all-todos') {
+      state.selectedScheduleLessonId = null;
+      renderWorkspace();
+      root.querySelector('#todo-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
     if (button.dataset.action === 'open-lesson-cell') {
       state.scheduleEditorSlot = {
         weekNumber: Number(button.dataset.week),
@@ -709,42 +668,6 @@ function bindEvents() {
     if (button.dataset.action === 'cancel-lesson-cell') {
       state.scheduleEditorSlot = null;
       renderWorkspace();
-      return;
-    }
-    if (button.dataset.action === 'select-task-lesson') {
-      const lesson = state.lessons.find(item => item.id === button.dataset.id);
-      const form = root.querySelector('#task-form');
-      if (!lesson || !form) return;
-      state.selectedTaskLessonId = lesson.id;
-      const weekdayNames = ['','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'];
-      const lessonDate = nextLessonDate(lesson);
-      form.elements.lessonId.value = lesson.id;
-      form.elements.lessonDate.value = lessonDate;
-      form.elements.subject.value = lesson.subject || '';
-      form.elements.weekday.value = Number(lesson.weekday);
-      form.elements.weekNumber.value = Number(lesson.weekNumber);
-      form.elements.lessonTime.value = lesson.startsAt || '';
-      root.querySelector('[data-selected-subject]').textContent = lesson.subject || '';
-      root.querySelector('[data-selected-weekday]').textContent = weekdayNames[lesson.weekday] || '';
-      root.querySelector('[data-selected-date]').textContent = dateText(lessonDate);
-      root.querySelector('[data-selected-time]').textContent = (lesson.startsAt || '') + (lesson.endsAt ? '–' + lesson.endsAt : '');
-      root.querySelector('[data-selected-placeholder]')?.classList.add('hidden');
-      const submitButton = form.querySelector('button[type="submit"]');
-      if (submitButton) submitButton.disabled = false;
-      root.querySelectorAll('.task-lesson-option').forEach(option => {
-        const selectedOption = option.dataset.id === lesson.id;
-        option.classList.toggle('selected', selectedOption);
-        option.setAttribute('aria-pressed', String(selectedOption));
-        const selectedLabel = option.querySelector('.task-lesson-selected');
-        if (selectedOption && !selectedLabel) {
-          const label = document.createElement('span');
-          label.className = 'task-lesson-selected';
-          label.textContent = 'Выбрано';
-          option.append(label);
-        } else if (!selectedOption && selectedLabel) {
-          selectedLabel.remove();
-        }
-      });
       return;
     }
     if (button.dataset.action === 'delete-lesson') return deleteLesson(button.dataset.id);
@@ -925,7 +848,8 @@ async function joinGroup(form) {
 
 async function submitTask(form) {
   const values = Object.fromEntries(new FormData(form).entries());
-  const lesson = state.lessons.find(item => item.id === values.lessonId);
+  const lesson = state.lessons.find(item => item.id === values.lessonId) ||
+    state.lessons.find(item => item.id === state.selectedScheduleLessonId);
   if (!lesson) {
     notify('Выбери пару из расписания.', 'error');
     return;
@@ -966,8 +890,10 @@ async function submitTask(form) {
       });
       notify('Предложение отправлено старосте.', 'success');
     }
+    state.selectedScheduleLessonId = lesson.id;
     await loadWorkspace();
     renderWorkspace();
+    root.querySelector('#todo-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (error) {
     notify(error.message || 'Не удалось сохранить задание.', 'error');
   } finally {
@@ -1135,6 +1061,7 @@ async function deleteLesson(lessonId) {
       await batch.commit();
     }
 
+    if (state.selectedScheduleLessonId === lessonId) state.selectedScheduleLessonId = null;
     notify('Пара и связанные отметки удалены.', 'success');
     await loadWorkspace();
     renderWorkspace();
