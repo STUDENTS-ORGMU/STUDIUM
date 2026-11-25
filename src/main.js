@@ -95,13 +95,142 @@ function notify(message, kind = 'info') {
 
 function setBusy(flag) {
   state.busy = flag;
-  root.querySelectorAll('button, input, select, textarea').forEach(element => {
-    element.disabled = flag;
+  root.setAttribute('aria-busy', flag ? 'true' : 'false');
+  root.classList.toggle('app-busy', flag);
+}
+
+function domKey(node) {
+  if (node.nodeType !== 1) return null;
+  if (node.id) return 'id:' + node.id;
+  const explicit = node.getAttribute('data-key');
+  if (explicit) return 'key:' + explicit;
+  for (const attribute of ['data-progress', 'data-attendance-lesson', 'data-schedule-lesson']) {
+    if (node.hasAttribute(attribute)) return attribute + ':' + node.getAttribute(attribute);
+  }
+  if (node.dataset.action && node.dataset.id) {
+    return 'action:' + node.dataset.action + ':' + node.dataset.id;
+  }
+  if (node.dataset.student && node.dataset.lesson) {
+    return 'student:' + node.dataset.student + ':' + node.dataset.lesson;
+  }
+  return null;
+}
+
+function compatibleNodes(current, fresh) {
+  if (current.nodeType !== fresh.nodeType) return false;
+  if (current.nodeType === 1 && current.tagName !== fresh.tagName) return false;
+  return true;
+}
+
+function syncFormControl(current, fresh) {
+  if (current.nodeType !== 1) return;
+  const tag = current.tagName;
+  const focused = current === document.activeElement;
+
+  if (tag === 'INPUT') {
+    const type = (current.getAttribute('type') || 'text').toLowerCase();
+    if (type === 'checkbox' || type === 'radio') {
+      current.checked = fresh.checked;
+      current.indeterminate = fresh.indeterminate;
+    } else if (type === 'date' || type === 'time' || type === 'month' || type === 'week' || type === 'hidden') {
+      current.value = fresh.value;
+    } else if (!focused) {
+      const wasEdited = current.value !== current.defaultValue;
+      const nextValue = fresh.value;
+      current.defaultValue = fresh.defaultValue;
+      if (!wasEdited) current.value = nextValue;
+    }
+  } else if (tag === 'TEXTAREA') {
+    if (!focused) {
+      const wasEdited = current.value !== current.defaultValue;
+      const nextValue = fresh.value;
+      current.defaultValue = fresh.defaultValue;
+      if (!wasEdited) current.value = nextValue;
+    }
+  } else if (tag === 'SELECT' && !focused) {
+    const nextValue = fresh.value;
+    if (Array.from(current.options).some(option => option.value === nextValue)) {
+      current.value = nextValue;
+    }
+  }
+}
+
+function morphNode(current, fresh) {
+  if (!compatibleNodes(current, fresh)) return fresh.cloneNode(true);
+
+  if (current.nodeType === 3 || current.nodeType === 8) {
+    if (current.nodeValue !== fresh.nodeValue) current.nodeValue = fresh.nodeValue;
+    return current;
+  }
+
+  const nextAttributes = new Map(Array.from(fresh.attributes, attribute => [attribute.name, attribute.value]));
+  Array.from(current.attributes).forEach(attribute => {
+    if (!nextAttributes.has(attribute.name)) current.removeAttribute(attribute.name);
+  });
+  nextAttributes.forEach((value, name) => {
+    if (current.getAttribute(name) !== value) current.setAttribute(name, value);
+  });
+
+  morphChildren(current, fresh);
+  syncFormControl(current, fresh);
+  return current;
+}
+
+function morphChildren(currentParent, freshParent) {
+  const oldChildren = Array.from(currentParent.childNodes);
+  const newChildren = Array.from(freshParent.childNodes);
+  const keyed = new Map();
+  oldChildren.forEach(node => {
+    const key = domKey(node);
+    if (key) keyed.set(key, node);
+  });
+  const used = new Set();
+  let searchFrom = 0;
+
+  newChildren.forEach((freshNode, index) => {
+    const key = domKey(freshNode);
+    let candidate = key ? keyed.get(key) : null;
+
+    if (!candidate && !key) {
+      const preferred = oldChildren[index];
+      if (preferred && !used.has(preferred) && !domKey(preferred) && compatibleNodes(preferred, freshNode)) {
+        candidate = preferred;
+      } else {
+        for (let cursor = searchFrom; cursor < oldChildren.length; cursor++) {
+          const option = oldChildren[cursor];
+          if (!used.has(option) && !domKey(option) && compatibleNodes(option, freshNode)) {
+            candidate = option;
+            searchFrom = cursor + 1;
+            break;
+          }
+        }
+      }
+    }
+
+    let nextNode;
+    if (candidate && !used.has(candidate)) {
+      used.add(candidate);
+      nextNode = morphNode(candidate, freshNode);
+      if (nextNode !== candidate && candidate.parentNode === currentParent) {
+        currentParent.replaceChild(nextNode, candidate);
+      }
+    } else {
+      nextNode = freshNode.cloneNode(true);
+    }
+
+    const reference = currentParent.childNodes[index] || null;
+    if (reference !== nextNode) currentParent.insertBefore(nextNode, reference);
+  });
+
+  oldChildren.forEach(node => {
+    if (!used.has(node) && node.parentNode === currentParent) currentParent.removeChild(node);
   });
 }
 
 function frame(html) {
-  root.innerHTML = html + '<div id="toast" role="status" aria-live="polite"></div>';
+  const template = document.createElement('template');
+  template.innerHTML = html + '<div id="toast" role="status" aria-live="polite"></div>';
+  morphChildren(root, template.content);
 }
 
 function renderSetup() {
@@ -1443,6 +1572,7 @@ function bindEvents() {
   root.addEventListener('click', async event => {
     const button = event.target.closest('button,[data-schedule-lesson]');
     if (!button) return;
+    if (state.busy && !button.dataset.tab && button.dataset.action !== 'menu') return;
     if (button.dataset.mode) return renderAuth(button.dataset.mode);
     if (button.dataset.tab) { state.tab = button.dataset.tab; return renderWorkspace(); }
     if (button.dataset.action === 'logout') return doSignOut();
@@ -1511,6 +1641,7 @@ function bindEvents() {
     const form = event.target;
     if (!form.matches('form')) return;
     event.preventDefault();
+    if (state.busy) return;
     if (form.id === 'auth-form') return submitAuth(form);
     if (form.id === 'create-group') return createGroup(form);
     if (form.id === 'join-group') return joinGroup(form);
@@ -1520,6 +1651,7 @@ function bindEvents() {
   });
 
   root.addEventListener('change', async event => {
+    if (state.busy) return;
     if (event.target.matches('[data-progress]')) return updateProgress(event.target);
     if (event.target.id === 'attendance-date' && event.target.value) {
       state.attendanceDate = event.target.value;
