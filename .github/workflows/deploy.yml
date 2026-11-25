@@ -29,7 +29,6 @@ jobs:
           VITE_FIREBASE_API_KEY: 'AIzaSyCO2fAyU8AerjaRpb602kVhK5rJbJ1ISMw'
           VITE_FIREBASE_AUTH_DOMAIN: 'studium-99b06.firebaseapp.com'
           VITE_FIREBASE_PROJECT_ID: 'studium-99b06'
-          VITE_FIREBASE_STORAGE_BUCKET: 'studium-99b06.firebasestorage.app'
           VITE_FIREBASE_MESSAGING_SENDER_ID: '732354701865'
           VITE_FIREBASE_APP_ID: '1:732354701865:web:75f306642d6d46d3a7ca38'
       - name: Configure Pages
