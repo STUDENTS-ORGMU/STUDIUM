@@ -1853,91 +1853,45 @@ async function savePassword(form) {
 
 async function createGroup(form) {
   const name = String(new FormData(form).get('name') || '').trim();
+  if (!name) return notify('Укажи название группы.', 'error');
   setBusy(true);
+  const groupId = crypto.randomUUID();
+  const inviteCode = makeInviteCode();
   try {
-    const groupRef = doc(collection(db, 'groups'));
-    const inviteCode = makeInviteCode();
-    const groupId = groupRef.id;
-    const userRef = doc(db, 'users', state.user.uid);
-    const memberRef = doc(db, 'groups', groupId, 'members', state.user.uid);
-    const userGroupRef = doc(db, 'users', state.user.uid, 'groups', groupId);
-    const inviteRef = doc(db, 'inviteCodes', inviteCode);
-    const cycleStart = mondayOf(new Date());
-
-    const batch = writeBatch(db);
-    batch.set(groupRef, {
-      name,
-      createdBy: state.user.uid,
-      studyCycleStart: cycleStart,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
+    const { error: groupError } = await supabase.from('study_groups').insert({
+      id: groupId, name, created_by: state.user.id, data: { studyCycleStart: mondayOf(new Date()) }
     });
-    batch.set(memberRef, {
-      userId: state.user.uid,
-      displayName: displayFullName(state.profile),
-      role: 'leader',
-      joinedAt: serverTimestamp()
+    if (groupError) throw groupError;
+    const { error: memberError } = await supabase.from('group_members').insert({
+      group_id: groupId, user_id: state.user.id, role: 'leader', display_name: displayFullName(state.profile)
     });
-    batch.set(userGroupRef, {
-      groupId,
-      name,
-      role: 'leader',
-      inviteCode,
-      joinedAt: serverTimestamp()
+    if (memberError) throw memberError;
+    const { error: inviteError } = await supabase.from('invite_codes').insert({
+      code: inviteCode, group_id: groupId, created_by: state.user.id, data: { groupName: name }
     });
-    batch.set(inviteRef, {
-      groupId,
-      groupName: name,
-      createdBy: state.user.uid,
-      createdAt: serverTimestamp()
-    });
-    await batch.commit();
+    if (inviteError) throw inviteError;
     await loadMemberships();
     await selectGroup(groupId);
   } catch (error) {
+    console.error('STUDIUM group creation failed', error);
     notify(error.message || 'Не удалось создать группу.', 'error');
-  } finally {
-    setBusy(false);
-  }
+  } finally { setBusy(false); }
 }
 
 async function joinGroup(form) {
   const code = String(new FormData(form).get('code') || '').trim().toUpperCase();
   setBusy(true);
   try {
-    const inviteSnapshot = await getDoc(doc(db, 'inviteCodes', code));
-    if (!inviteSnapshot.exists()) throw new Error('Код приглашения не найден.');
-    const invite = inviteSnapshot.data();
-    const groupId = invite.groupId;
-    const memberRef = doc(db, 'groups', groupId, 'members', state.user.uid);
-    const existing = await getDoc(memberRef);
-    if (existing.exists()) {
-      await loadMemberships();
-      return selectGroup(groupId);
-    }
-
-    const batch = writeBatch(db);
-    batch.set(memberRef, {
-      userId: state.user.uid,
-      displayName: displayFullName(state.profile),
-      role: 'student',
-      inviteCodeUsed: code,
-      joinedAt: serverTimestamp()
+    const { data: groupId, error } = await supabase.rpc('join_group_with_invite', {
+      p_code: code, p_display_name: displayFullName(state.profile)
     });
-    batch.set(doc(db, 'users', state.user.uid, 'groups', groupId), {
-      groupId,
-      name: invite.groupName || 'Учебная группа',
-      role: 'student',
-      joinedAt: serverTimestamp()
-    });
-    await batch.commit();
+    if (error) throw error;
+    if (!groupId) throw new Error('Код приглашения не найден.');
     await loadMemberships();
     await selectGroup(groupId);
   } catch (error) {
     notify(error.message || 'Не удалось вступить в группу.', 'error');
-  } finally {
-    setBusy(false);
-  }
+  } finally { setBusy(false); }
 }
 
 async function submitTask(form) {
