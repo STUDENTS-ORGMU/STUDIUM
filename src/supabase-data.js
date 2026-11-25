@@ -5,7 +5,7 @@ const pathOf = parts => parts.filter(Boolean).join('/');
 export const db = {};
 export const collection = (_db, ...parts) => ref('collection', pathOf(parts));
 export const doc = (base, ...parts) => {
-  if (base?.__ref) return ref('document', pathOf([base.path, ...parts]));
+  if (base?.__ref) return ref('document', pathOf([base.path, ...(parts.length ? parts : [crypto.randomUUID()])]));
   return ref('document', pathOf(parts));
 };
 export const where = (field, op, value) => ({ type: 'where', field, op, value });
