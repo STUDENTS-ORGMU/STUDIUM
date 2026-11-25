@@ -788,7 +788,7 @@ async function saveAttendance(lessonId, response) {
     notify(
       autoMarked
         ? (response === 'will_attend' ? 'Ответ сохранён. В журнале автоматически отмечено «Был».' : 'Ответ сохранён. В журнале автоматически отмечено «Неуваж.» — староста может изменить отметку.')
-        : 'Ответ сохранён. Официальная отметка не изменена, потому что её уже вручную выставил староста.',
+        : 'Ответ сохранён. Автоматическая отметка не изменила журнал: возможно, староста уже исправил её вручную или новые правила Firestore ещё не опубликованы.',
       'success'
     );
     await loadWorkspace();
@@ -847,7 +847,7 @@ async function saveAttendanceForAll(response) {
     const label = response === 'will_attend' ? 'Буду на всех парах' : 'Не буду на всех парах';
     notify(
       label + '. Автоматически выставлено отметок: ' + automaticCount +
-      (protectedCount ? '. Ещё ' + protectedCount + ' отметок старосты оставлены без изменений.' : '.'),
+      (protectedCount ? '. Ещё ' + protectedCount + ' отметок не изменены: возможно, староста исправил их вручную или новые правила Firestore ещё не опубликованы.' : '.'),
       'success'
     );
     await loadWorkspace();
