@@ -419,7 +419,7 @@ function taskForm() {
     '</p></div>' +
     '<form id="task-form" class="form task-form">' +
     '<div class="task-schedule-picker"><div class="task-schedule-picker-head"><strong>Выбери пару</strong><span>Нажми на карточку занятия</span></div>' + weeks + '</div>' +
-    '<input type="hidden" name="lessonId" value="' + esc(selected.id) + '">' +
+    '<input type="hidden" name="lessonId" value="' + esc(selected?.id || '') + '">' +
     '<div class="task-selected-lesson">' +
       '<div class="task-selected-lesson-head"><span>ВЫБРАННАЯ ПАРА</span><b>✓</b></div>' +
       '<p class="task-selected-placeholder' + (selected ? ' hidden' : '') + '" data-selected-placeholder>Нажми на занятие в расписании выше — здесь появятся предмет, день, дата и время.</p>' +
