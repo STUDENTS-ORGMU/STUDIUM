@@ -39,6 +39,10 @@ export async function signUpWithUsername({ username, password, fullName }) {
     patronymic: ''
   }, { onConflict: 'id' });
   if (profileError) throw profileError;
+  const { error: aliasError } = await supabase.from('username_logins').insert({
+    username: normalized, auth_email: data.user.email, user_id: data.user.id
+  });
+  if (aliasError) throw aliasError;
   return data;
 }
 
@@ -46,8 +50,10 @@ export async function signInWithUsername({ username, password }) {
   requireSupabase();
   const normalized = normalizeUsername(username);
   if (!validUsername(normalized)) throw new Error('Проверь логин.');
+  const { data: resolvedEmail, error: lookupError } = await supabase.rpc('resolve_login_email', { p_username: normalized });
+  if (lookupError) throw lookupError;
   const { data, error } = await supabase.auth.signInWithPassword({
-    email: authEmailForUsername(normalized),
+    email: resolvedEmail || authEmailForUsername(normalized),
     password
   });
   if (error) throw error;
