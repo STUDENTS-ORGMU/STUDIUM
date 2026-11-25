@@ -52,6 +52,9 @@ async function readUsernameAlias(username) {
 
 async function resolveAuthEmailForUsername(username) {
   const alias = await readUsernameAlias(username);
+  if (alias?.disabled === true) {
+    throw new Error('Этот логин больше не активен. Введи актуальный логин.');
+  }
   return typeof alias?.authEmail === 'string' && alias.authEmail
     ? alias.authEmail
     : authEmailForUsername(username);
@@ -64,6 +67,9 @@ async function ensureUsernameAlias(user, username) {
     const aliasRef = usernameAliasRef(normalized);
     const snapshot = await getDoc(aliasRef);
     if (snapshot.exists()) {
+      if (snapshot.data().disabled === true) {
+        throw new Error('Этот логин больше не активен. Введи актуальный логин.');
+      }
       if (snapshot.data().authEmail !== user.email) {
         throw new Error('Этот логин уже связан с другим аккаунтом. Обратись к администратору STUDIUM.');
       }
@@ -1603,8 +1609,11 @@ async function saveUsername(form) {
 
     const oldAliasRef = usernameAliasRef(oldUsername);
     const oldAliasSnapshot = await getDoc(oldAliasRef);
-    if (oldAliasSnapshot.exists() && oldAliasSnapshot.data().authEmail !== state.user.email) {
-      throw new Error('Текущий логин связан с другим аккаунтом. Изменение остановлено для защиты доступа.');
+    if (!oldAliasSnapshot.exists()) {
+      throw new Error('Сначала обнови страницу после публикации новых правил Firestore, чтобы привязать текущий логин, затем повтори смену.');
+    }
+    if (oldAliasSnapshot.data().authEmail !== state.user.email || oldAliasSnapshot.data().disabled === true) {
+      throw new Error('Текущий логин не подтверждён для этого аккаунта. Изменение остановлено для защиты доступа.');
     }
 
     const batch = writeBatch(db);
@@ -1612,7 +1621,9 @@ async function saveUsername(form) {
       authEmail: state.user.email,
       createdAt: serverTimestamp()
     });
-    if (oldAliasSnapshot.exists()) batch.delete(oldAliasRef);
+    // Retain a disabled tombstone so the previous login can never fall back
+    // to the original Firebase alias and open this same account again.
+    batch.update(oldAliasRef, { disabled: true });
     batch.update(doc(db, 'users', state.user.uid), {
       username,
       updatedAt: serverTimestamp()
