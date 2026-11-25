@@ -515,23 +515,7 @@ function validateMaterialFile(file) {
   if (!file.size) throw new Error('Файл пустой.');
 }
 
-function encodeMaterialChunk(bytes) {
-  let binary = '';
-  const blockSize = 0x8000;
-  for (let offset = 0; offset < bytes.length; offset += blockSize) {
-    binary += String.fromCharCode(...bytes.subarray(offset, offset + blockSize));
-  }
-  return btoa(binary);
-}
-
-function decodeMaterialChunk(value) {
-  const binary = atob(value);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-  return bytes;
-}
-
-async function removeMaterialChunks(groupId, materialId, storagePath = '') {
+async function removeStoredMaterialFile(groupId, materialId, storagePath = '') {
   const path = storagePath || `${groupId}/${materialId}`;
   const { error } = await supabase.storage.from('group-materials').remove([path]);
   if (error) throw error;
@@ -563,7 +547,7 @@ async function uploadGroupMaterial(form) {
     renderWorkspace();
     notify('Файл добавлен в материалы группы.', 'success');
   } catch (error) {
-    try { await removeMaterialChunks(state.group.id, materialId, storagePath); } catch {}
+    try { await removeStoredMaterialFile(state.group.id, materialId, storagePath); } catch {}
     console.error('STUDIUM material upload failed:', error);
     notify(error.message || 'Не удалось загрузить файл в Supabase Storage.', 'error');
   } finally { setBusy(false); }
@@ -628,7 +612,7 @@ async function deleteGroupMaterial(materialId) {
   setBusy(true);
   try {
     if (item.fileStorage === 'supabase-storage' && item.storagePath) {
-      await removeMaterialChunks(state.group.id, item.id, item.storagePath);
+      await removeStoredMaterialFile(state.group.id, item.id, item.storagePath);
     }
     await deleteDoc(doc(db, 'groups', state.group.id, 'materials', materialId));
     notify('Материал удалён.', 'success');
