@@ -1,7 +1,7 @@
 # Firebase → Supabase migration
 
 ## Current safety status
-Supabase SDK and a first-pass schema are staged. **The live app still uses Firebase Auth and Firestore.** Do not remove Firebase settings or delete Firebase data before a verified import and a separate cutover release.
+Supabase SDK and the initial database schema are installed. The app remains on Firebase. **The live app still uses Firebase Auth and Firestore.** Do not remove Firebase settings or delete Firebase data before a verified import and a separate cutover release.
 
 ## Configure the project
 Copy the Project URL and publishable key from Supabase Dashboard → Project Settings → API (or Connect) into local `.env`:
@@ -12,7 +12,7 @@ VITE_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
 The publishable key is suitable for browser code only with correct RLS. Never expose a Supabase secret/service_role key in Vite, GitHub Pages variables, or source control.
 
 ## Apply SQL
-Run `supabase/migrations/202611260001_initial_schema.sql` in Supabase SQL Editor. It creates profiles, groups, memberships, invite codes, a JSONB compatibility table, RLS and a private Storage bucket.
+The migration `202611260001_initial_schema` has been applied to the connected project. It creates profiles, groups, memberships, invite codes, a JSONB compatibility table, RLS and a private Storage bucket. A follow-up migration adds `join_group_with_invite(code, display_name)` so clients cannot self-join arbitrary group IDs. It creates profiles, groups, memberships, invite codes, a JSONB compatibility table, RLS and a private Storage bucket.
 
 ## Data and accounts
 1. Export Firestore with Firebase Admin SDK in a trusted local environment. Never commit exports; they contain personal data.
@@ -26,7 +26,7 @@ Run `supabase/migrations/202611260001_initial_schema.sql` in Supabase SQL Editor
 No production importer or automatic backend switch is enabled yet: the actual export format and UID mapping must be validated before a repeatable importer is safe.
 
 ## Cutover blockers / acceptance tests
-- Implement a server-side invite-code join RPC; the initial exact-code lookup policy is permissive for authenticated SELECT and must be tightened before launch.
+- The invite-code join RPC is installed; client-side direct self-join is disabled. Test it with real authenticated accounts before cutover.
 - Replace generic leader-only writes on `group_records` with per-collection policies. Students need narrowly scoped writes for task suggestions, progress and attendance responses.
 - Test leader/student accounts and prove cross-group reads and unauthorized writes fail.
 - Verify every source/destination count and file hash.
