@@ -344,7 +344,7 @@ function renderModeration() {
 function renderSchedule() {
   const days = ['','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'];
   const add = state.role === 'leader' ? '<button class="btn primary" data-action="show-lesson">＋ Добавить пару</button>' : '';
-  const rows = state.lessons.map(item => '<article class="lesson"><time>' + esc(item.startsAt) + (item.endsAt ? '–' + esc(item.endsAt) : '') + '</time><div><small>' + days[item.weekday] + ' · ' + (item.weekNumber === 2 ? 'II неделя' : 'I неделя') + '</small><strong>' + esc(item.subject) + '</strong><p>' + esc(item.room || 'Аудитория не указана') + '</p></div></article>').join('');
+  const rows = state.lessons.map(item => '<article class="lesson"><time>' + esc(item.startsAt) + (item.endsAt ? '–' + esc(item.endsAt) : '') + '</time><div><small>' + days[item.weekday] + ' · ' + (item.weekNumber === 2 ? 'II неделя' : 'I неделя') + '</small><strong>' + esc(item.subject) + '</strong><p>' + esc(item.room || 'Аудитория не указана') + '</p></div>' + (state.role === 'leader' ? '<button type="button" class="btn danger lesson-delete" data-action="delete-lesson" data-id="' + esc(item.id) + '">Удалить пару</button>' : '') + '</article>').join('');
   return heading('РАСПИСАНИЕ', 'Занятия группы', 'Расписание на чередующиеся учебные недели.', add) +
     (state.role === 'leader' ? '<section class="panel inline-form hidden" id="lesson-editor"><form id="lesson-form" class="form"><h2>Новая пара</h2><label>Предмет<input name="subject" required maxlength="120"></label><div class="two"><label>День<select name="weekday"><option value="1">Понедельник</option><option value="2">Вторник</option><option value="3">Среда</option><option value="4">Четверг</option><option value="5">Пятница</option><option value="6">Суббота</option></select></label><label>Неделя<select name="weekNumber"><option value="1">Первая</option><option value="2">Вторая</option></select></label></div><div class="two"><label>Начало<input name="startsAt" type="time" value="08:30" required></label><label>Конец<input name="endsAt" type="time" value="10:05"></label></div><label>Аудитория<input name="room" maxlength="40"></label><button class="btn primary">Сохранить</button><button type="button" class="btn ghost" data-action="hide-lesson">Отмена</button></form></section>' : '') +
     (rows ? '<div class="lesson-list">' + rows + '</div>' : empty('Расписание пока пустое', 'Староста сможет добавить пары в этом разделе.'));
@@ -400,6 +400,7 @@ function bindEvents() {
     if (button.dataset.action === 'menu') { document.querySelector('.sidebar')?.classList.toggle('open'); return; }
     if (button.dataset.action === 'show-lesson') { document.querySelector('#lesson-editor')?.classList.remove('hidden'); return; }
     if (button.dataset.action === 'hide-lesson') { document.querySelector('#lesson-editor')?.classList.add('hidden'); return; }
+    if (button.dataset.action === 'delete-lesson') return deleteLesson(button.dataset.id);
     if (button.dataset.action === 'copy-code') {
       try { await navigator.clipboard.writeText(state.activeMembership.inviteCode); notify('Код скопирован.', 'success'); }
       catch { notify('Код приглашения: ' + state.activeMembership.inviteCode); }
@@ -702,6 +703,52 @@ async function submitLesson(form) {
     renderWorkspace();
   } catch (error) {
     notify(error.message || 'Не удалось добавить пару.', 'error');
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function deleteLesson(lessonId) {
+  if (state.role !== 'leader') {
+    notify('Удалять пары может только староста.', 'error');
+    return;
+  }
+  const lesson = state.lessons.find(item => item.id === lessonId);
+  if (!lesson) {
+    notify('Пара уже отсутствует в расписании.', 'error');
+    return;
+  }
+  const label = [lesson.subject, lesson.startsAt].filter(Boolean).join(' · ');
+  const confirmed = window.confirm(
+    'Удалить пару «' + label + '»?\n\nСвязанные предварительные ответы и официальные отметки посещаемости также будут удалены.'
+  );
+  if (!confirmed) return;
+
+  setBusy(true);
+  try {
+    const [responses, records] = await Promise.all([
+      getDocs(query(collection(db, 'groups', state.group.id, 'attendanceResponses'), where('lessonId', '==', lessonId))),
+      getDocs(query(collection(db, 'groups', state.group.id, 'attendanceRecords'), where('lessonId', '==', lessonId)))
+    ]);
+    const refs = [
+      ...responses.docs.map(item => item.ref),
+      ...records.docs.map(item => item.ref),
+      groupDocument('lessons', lessonId)
+    ];
+
+    // Keep each Firestore batch comfortably below the 500-write limit.
+    for (let offset = 0; offset < refs.length; offset += 450) {
+      const batch = writeBatch(db);
+      refs.slice(offset, offset + 450).forEach(ref => batch.delete(ref));
+      await batch.commit();
+    }
+
+    notify('Пара и связанные отметки удалены.', 'success');
+    await loadWorkspace();
+    renderWorkspace();
+  } catch (error) {
+    console.error('STUDIUM delete lesson failed:', error);
+    notify(error.message || 'Не удалось удалить пару. Проверь правила Firestore.', 'error');
   } finally {
     setBusy(false);
   }
