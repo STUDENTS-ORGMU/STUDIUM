@@ -139,3 +139,8 @@ Firebase Web config предназначен для идентификации W
 Раздел «Материалы» хранит метаданные, ссылки и содержимое файлов непосредственно в Cloud Firestore. Файлы разбиваются на небольшие Base64-части в подколлекции `groups/{groupId}/materialFiles/{materialId}/chunks`; Firebase Storage и тариф Blaze не требуются. Максимальный размер одного файла в интерфейсе — 20 МБ; староста может загружать и удалять файлы, участники группы — читать и скачивать.
 
 Для этой схемы опубликуй обновлённые правила Firestore: `firebase deploy --only firestore:rules`. Storage bucket создавать не нужно. Учти квоты Spark: 1 GiB данных, 50 000 чтений и 20 000 записей/удалений в сутки, 10 GiB исходящего трафика в месяц. Один документ Firestore ограничен 1 MiB, поэтому код разбивает файлы на части около 360 KiB. Это компромисс для небольших учебных материалов, а не замена специализированному файловому хранилищу.
+
+
+## Подготовка миграции на Supabase
+
+В репозитории подготовлен начальный Supabase-каркас: `src/supabase.js`, SQL-схема в `supabase/migrations/` и план переноса в `docs/FIREBASE_TO_SUPABASE_MIGRATION.md`. Приложение пока продолжает использовать Firebase — Supabase не является активным backend до завершения импорта и проверок. Для локальной настройки смотри `.env.example`; для GitHub Pages можно добавить Actions Variables `VITE_SUPABASE_URL` и `VITE_SUPABASE_PUBLISHABLE_KEY`. Используй только publishable key, никогда не добавляй secret/service_role key в клиентскую сборку.
