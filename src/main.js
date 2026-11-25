@@ -624,18 +624,13 @@ function nextLessonDate(lesson) {
 }
 
 function attendanceResponseLabel(response) {
-  if (response === 'will_attend') return '<span class="attendance-response will-attend">Будет</span>';
+  if (response === 'will_attend') return '<span class="attendance-response will-attend">Будет на паре</span>';
   if (response === 'will_miss') return '<span class="attendance-response will-miss">Не будет</span>';
-  return '<span class="attendance-response no-response">Не ответил</span>';
+  return '<span class="attendance-response no-response">Нет ответа</span>';
 }
 
 function attendanceStatusLabel(status) {
-  return ({
-    present: 'Присутствовал',
-    absent: 'Отсутствовал',
-    late: 'Опоздал',
-    excused: 'Уважительная причина'
-  })[status] || 'Не отмечен';
+  return ({ present: 'Был', absent: 'Неуваж.', excused: 'Уваж.', late: 'Опоздал' })[status] || 'Не отмечен';
 }
 
 function renderAttendanceRoster(lesson) {
@@ -651,39 +646,79 @@ function renderAttendanceRoster(lesson) {
     .filter(item => item.lessonId === lesson.id && item.lessonDate === state.attendanceDate)
     .map(item => [item.studentId, item]));
   const missed = members.filter(member => responses.get(member.id)?.response === 'will_miss');
-  const presentResponses = members.filter(member => responses.get(member.id)?.response === 'will_attend').length;
-  const notAnswered = members.length - presentResponses - missed.length;
+  const counts = {
+    present: members.filter(member => records.get(member.id)?.status === 'present').length,
+    absent: members.filter(member => records.get(member.id)?.status === 'absent').length,
+    excused: members.filter(member => records.get(member.id)?.status === 'excused').length
+  };
   const bulkButton = missed.length
-    ? '<button class="btn primary" type="button" data-action="excuse-all-missed" data-lesson="' + esc(lesson.id) + '">Поставить «Уважительная причина» всем (' + missed.length + ')</button>'
+    ? '<button class="attendance-bulk-excuse" type="button" data-action="excuse-all-missed" data-lesson="' + esc(lesson.id) + '">Поставить «Уваж.» всем, кто ответил «Не буду» (' + missed.length + ')</button>'
     : '';
 
-  const rows = members.map((member, index) => {
+  const rows = members.map(member => {
     const userId = member.id || member.userId;
     const name = member.displayName || member.fullName || member.username || 'Участник';
     const response = responses.get(userId)?.response || '';
-    const official = records.get(userId);
-    const status = official?.status || '';
+    const status = records.get(userId)?.status || '';
     const role = member.role === 'leader' ? '<span class="roster-role">Староста</span>' : '';
-    const excuseButton = response === 'will_miss' && status !== 'excused'
-      ? '<button type="button" class="roster-excuse-btn" data-action="excuse-student" data-student="' + esc(userId) + '" data-lesson="' + esc(lesson.id) + '">Уважительная причина</button>'
-      : '';
-    return '<article class="attendance-roster-row">' +
-      '<div class="roster-person"><span class="roster-number">' + (index + 1) + '</span><div><strong>' + esc(name) + '</strong>' + role + '</div></div>' +
-      '<div class="roster-response">' + attendanceResponseLabel(response) + '</div>' +
-      '<div class="roster-official"><label><span>Отметка старосты</span><select data-attendance-status data-student="' + esc(userId) + '" data-lesson="' + esc(lesson.id) + '">' +
-        '<option value="" ' + (!status ? 'selected' : '') + '>Не отмечен</option>' +
-        '<option value="present" ' + (status === 'present' ? 'selected' : '') + '>Присутствовал</option>' +
-        '<option value="absent" ' + (status === 'absent' ? 'selected' : '') + '>Отсутствовал</option>' +
-        '<option value="late" ' + (status === 'late' ? 'selected' : '') + '>Опоздал</option>' +
-        '<option value="excused" ' + (status === 'excused' ? 'selected' : '') + '>Уважительная причина</option>' +
-      '</select></label>' + excuseButton + '</div>' +
-    '</article>';
+    const responseText = response === 'will_attend' ? 'Ответ: будет на паре'
+      : (response === 'will_miss' ? 'Ответ: не будет на паре' : 'Ответ: пока не дан');
+    const responseClass = response === 'will_attend' ? ' positive'
+      : (response === 'will_miss' ? ' negative' : '');
+    const lateNote = status === 'late' ? '<span class="roster-late-note">Последняя отметка: опоздал</span>' : '';
+    const mark = (value, label, cls) =>
+      '<button type="button" class="attendance-mark ' + cls + (status === value ? ' active' : '') +
+      '" data-official-status="' + value + '" data-student="' + esc(userId) +
+      '" data-lesson="' + esc(lesson.id) + '" aria-pressed="' + (status === value) + '">' + label + '</button>';
+    return '<article class="attendance-person-row"><div class="attendance-person-info"><strong>' + esc(name) + '</strong>' + role +
+      '<small class="attendance-person-response' + responseClass + '">' + responseText + '</small>' + lateNote + '</div>' +
+      '<div class="attendance-mark-buttons">' +
+      mark('present', 'Был', 'mark-present') +
+      mark('absent', 'Неуваж.', 'mark-absent') +
+      mark('excused', 'Уваж.', 'mark-excused') +
+      '</div></article>';
   }).join('');
 
-  return '<section class="attendance-register"><div class="attendance-register-head"><div><p class="eyebrow">ОФИЦИАЛЬНЫЙ ЖУРНАЛ</p><h2>Список группы</h2><p class="muted">Участники отсортированы по алфавиту, включая старосту.</p></div>' + bulkButton + '</div>' +
-    '<div class="attendance-summary"><span>Будут: <b>' + presentResponses + '</b></span><span>Не будут: <b>' + missed.length + '</b></span><span>Без ответа: <b>' + notAnswered + '</b></span><span>Всего: <b>' + members.length + '</b></span></div>' +
+  return '<section class="attendance-register"><div class="attendance-register-head"><div><p class="eyebrow">ОФИЦИАЛЬНЫЙ ЖУРНАЛ</p><h2>' + esc(lesson.subject) + '</h2><p class="muted">' + esc(lesson.startsAt || '') + (lesson.endsAt ? '–' + esc(lesson.endsAt) : '') + ' · ' + esc(dateText(state.attendanceDate)) + '</p></div>' +
+    '<div class="attendance-register-count">' + members.length + ' чел.</div></div>' +
+    '<div class="attendance-register-summary"><span>Был: <b>' + counts.present + '</b></span><span>Неуваж.: <b>' + counts.absent + '</b></span><span>Уваж.: <b>' + counts.excused + '</b></span></div>' +
+    (bulkButton ? '<div class="attendance-bulk-row">' + bulkButton + '</div>' : '') +
     (rows ? '<div class="attendance-roster">' + rows + '</div>' : empty('В группе пока нет участников', 'Когда студенты вступят в группу, они появятся здесь.')) +
-    '<p class="muted small">«Будет / Не будет» — предварительный ответ студента. Отметка справа — официальный журнал старосты.</p></section>';
+    '<p class="muted small attendance-register-footnote">Ответ «Будет / Не будет» оставляет студент. Кнопки справа — официальная отметка старосты. Повторное нажатие снимает отметку.</p></section>';
+}
+
+function renderStudentAttendance(lessons, date) {
+  const profileName = displayFullName(state.profile);
+  const [year, month, day] = date.split('-').map(Number);
+  const dateObj = new Date(year, month - 1, day, 12);
+  const dateLabel = dateObj.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+  const weekdayLabel = dateObj.toLocaleDateString('ru-RU', { weekday: 'long' });
+  const responseMap = new Map(state.attendance.map(item => [item.lessonId, item.response]));
+  const attendedCount = lessons.filter(item => responseMap.get(item.id) === 'will_attend').length;
+  const missedCount = lessons.filter(item => responseMap.get(item.id) === 'will_miss').length;
+  const allAttend = lessons.length > 0 && attendedCount === lessons.length;
+  const allMiss = lessons.length > 0 && missedCount === lessons.length;
+  const quick = lessons.length
+    ? '<div class="attendance-all-actions">' +
+      '<button type="button" class="attendance-all-button' + (allAttend ? ' active' : '') + '" data-attendance-all="will_attend">Буду на всех парах</button>' +
+      '<button type="button" class="attendance-all-button' + (allMiss ? ' active' : '') + '" data-attendance-all="will_miss">Не буду на всех парах</button>' +
+      '</div>' : '';
+  const cards = lessons.map((lesson,index) => {
+    const response = responseMap.get(lesson.id) || '';
+    return '<article class="student-attendance-lesson"><div class="student-attendance-lesson-title"><div>' +
+      '<small>' + (index + 1) + ' пара · ' + esc(lesson.startsAt || '') + (lesson.endsAt ? '–' + esc(lesson.endsAt) : '') + '</small>' +
+      '<h2>' + esc(lesson.subject) + '</h2>' + (lesson.room ? '<p>' + esc(lesson.room) + '</p>' : '') +
+      '</div>' + (response ? attendanceResponseLabel(response) : '') + '</div>' +
+      '<div class="student-attendance-lesson-actions">' +
+      '<button type="button" class="attendance-choice' + (response === 'will_attend' ? ' active attend' : '') + '" data-attendance="will_attend" data-lesson="' + esc(lesson.id) + '">Буду</button>' +
+      '<button type="button" class="attendance-choice' + (response === 'will_miss' ? ' active miss' : '') + '" data-attendance="will_miss" data-lesson="' + esc(lesson.id) + '">Не буду</button>' +
+      '</div></article>';
+  }).join('');
+  return '<section class="student-attendance-page"><header class="student-attendance-header"><div><h1>' + esc(profileName) + '</h1><p>' + esc(dateLabel) + ', ' + esc(weekdayLabel) + '</p></div>' +
+    '<div class="student-attendance-date"><label for="attendance-date">Дата</label><input type="date" id="attendance-date" value="' + date + '"></div></header>' +
+    '<p class="student-attendance-caption">Отметь, будешь ли ты на занятиях. Староста увидит твой ответ.</p>' + quick +
+    (lessons.length ? '<div class="student-attendance-lessons">' + cards + '</div>' : empty('На эту дату пар нет', 'Выбери другую дату или проверь расписание группы.')) +
+    '</section>';
 }
 
 function renderAttendance() {
@@ -693,501 +728,32 @@ function renderAttendance() {
   const week = lessonWeekFor(date);
   const lessons = state.lessons.filter(item => Number(item.weekday) === weekday && Number(item.weekNumber) === week)
     .sort((a,b) => String(a.startsAt).localeCompare(String(b.startsAt)));
-  const ownResponses = new Map(state.attendance.filter(item => item.userId === state.user.uid).map(item => [item.lessonId, item.response]));
-  const selected = lessons.find(item => item.id === state.selectedAttendanceLessonId) || null;
-  const leaderLessonCards = lessons.map(item => {
-    const responses = state.attendance.filter(response => response.lessonId === item.id);
-    const attending = responses.filter(response => response.response === 'will_attend').length;
-    const missing = responses.filter(response => response.response === 'will_miss').length;
-    const selectedClass = selected?.id === item.id ? ' selected' : '';
-    return '<button type="button" class="attendance-lesson-card' + selectedClass + '" data-attendance-lesson="' + esc(item.id) + '">' +
-      '<span>' + esc(item.startsAt) + (item.endsAt ? '–' + esc(item.endsAt) : '') + '</span><strong>' + esc(item.subject) + '</strong>' +
-      '<small>' + (state.role === 'leader' ? 'Будут: ' + attending + ' · Не будут: ' + missing : 'Выбери пару для ответа') + '</small></button>';
-  }).join('');
 
-  const studentResponsePanel = state.role !== 'leader' && selected
-    ? '<section class="student-attendance-response panel"><p class="eyebrow">ТВОЙ ОТВЕТ</p><h2>' + esc(selected.subject) + '</h2><p class="muted">Сообщи старосте, планируешь ли ты быть на этой паре.</p><div class="actions">' +
-      '<button class="btn ' + (ownResponses.get(selected.id) === 'will_attend' ? 'primary' : 'secondary') + '" data-attendance="will_attend" data-lesson="' + esc(selected.id) + '">Буду</button>' +
-      '<button class="btn ' + (ownResponses.get(selected.id) === 'will_miss' ? 'primary' : 'secondary') + '" data-attendance="will_miss" data-lesson="' + esc(selected.id) + '">Не буду</button>' +
-      '</div></section>'
-    : '';
-
-  return heading('ПОСЕЩАЕМОСТЬ', state.role === 'leader' ? 'Посещаемость группы' : 'Моя посещаемость',
-      state.role === 'leader' ? 'Выбери дату и пару, чтобы открыть алфавитный список группы.' : 'Выбери пару и отметь, планируешь ли ты присутствовать.') +
-    '<div class="date-picker"><label>Дата<input type="date" id="attendance-date" value="' + date + '"></label><span>' + (week === 1 ? 'Первая' : 'Вторая') + ' учебная неделя</span></div>' +
-    (lessons.length ? '<div class="attendance-lesson-grid">' + leaderLessonCards + '</div>' : empty('На эту дату пар нет', 'Выбери другую дату или проверь расписание группы.')) +
-    (selected && state.role === 'leader' ? renderAttendanceRoster(selected) : '') +
-    studentResponsePanel +
-    (state.role === 'leader' && !selected ? '<p class="muted small">Нажми на карточку пары выше — откроется список всех студентов и старосты по алфавиту.</p>' : '') +
-    '<p class="muted small">Предварительный ответ студента и официальная отметка посещаемости ведутся отдельно.</p>';
-}
-
-function renderManage() {
-  const select = state.memberships.length > 1
-    ? '<label class="field-label">Переключить группу<select id="group-switch">' + state.memberships.map(item => '<option value="' + esc(item.groupId) + '" ' + (item.groupId === state.group.id ? 'selected' : '') + '>' + esc(item.name) + '</option>').join('') + '</select></label>'
-    : '';
-  const invite = state.role === 'leader' && state.activeMembership?.inviteCode
-    ? '<section class="panel invite"><div><small>КОД ПРИГЛАШЕНИЯ</small><h2>' + esc(state.activeMembership.inviteCode) + '</h2><p class="muted">Отправь этот код одногруппникам.</p></div><button class="btn secondary" data-action="copy-code">Скопировать</button></section>'
-    : '';
-  return heading('ПРОСТРАНСТВО ГРУППЫ', 'Управление', 'Участники и настройки учебного пространства.') +
-    invite +
-    '<section class="panel"><p>Твоя роль: <strong>' + (state.role === 'leader' ? 'Староста' : 'Студент') + '</strong></p>' + select +
-    (state.role === 'leader' ? '<form id="cycle-form" class="form"><label>Начало первой учебной недели (понедельник)<input name="studyCycleStart" type="date" value="' + esc(state.group.studyCycleStart || '') + '" required></label><button class="btn secondary">Сохранить учебный цикл</button></form>' : '') + '</section>';
-}
-
-function bindEvents() {
-  root.addEventListener('click', async event => {
-    const button = event.target.closest('button,[data-schedule-lesson]');
-    if (!button) return;
-    if (button.dataset.mode) return renderAuth(button.dataset.mode);
-    if (button.dataset.tab) { state.tab = button.dataset.tab; return renderWorkspace(); }
-    if (button.dataset.action === 'logout') return doSignOut();
-    if (button.dataset.action === 'menu') { document.querySelector('.sidebar')?.classList.toggle('open'); return; }
-    if (button.dataset.scheduleLesson !== undefined) {
-      state.selectedScheduleLessonId = button.dataset.id;
-      renderWorkspace();
-      root.querySelector('#homework-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      return;
-    }
-    if (button.dataset.action === 'show-all-homework') {
-      state.selectedScheduleLessonId = null;
-      renderWorkspace();
-      root.querySelector('#homework-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      return;
-    }
-    if (button.dataset.attendanceLesson) {
-      state.selectedAttendanceLessonId = button.dataset.attendanceLesson;
-      renderWorkspace();
-      root.querySelector('.attendance-register, .student-attendance-response')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      return;
-    }
-    if (button.dataset.action === 'excuse-all-missed') return excuseMissedStudents(button.dataset.lesson);
-    if (button.dataset.action === 'excuse-student') return excuseMissedStudents(button.dataset.lesson, button.dataset.student);
-    if (button.dataset.action === 'open-lesson-cell') {
-      state.scheduleEditorSlot = {
-        weekNumber: Number(button.dataset.week),
-        weekday: Number(button.dataset.day),
-        periodIndex: Number(button.dataset.period)
-      };
-      renderWorkspace();
-      root.querySelector('#lesson-form input[name="subject"]')?.focus();
-      return;
-    }
-    if (button.dataset.action === 'cancel-lesson-cell') {
-      state.scheduleEditorSlot = null;
-      renderWorkspace();
-      return;
-    }
-    if (button.dataset.action === 'delete-lesson') return deleteLesson(button.dataset.id);
-    if (button.dataset.action === 'copy-code') {
-      try { await navigator.clipboard.writeText(state.activeMembership.inviteCode); notify('Код скопирован.', 'success'); }
-      catch { notify('Код приглашения: ' + state.activeMembership.inviteCode); }
-      return;
-    }
-    if (button.dataset.review) return reviewSuggestion(button.dataset.id, button.dataset.review === 'approve');
-    if (button.dataset.attendance) return saveAttendance(button.dataset.lesson, button.dataset.attendance);
-  });
-
-  root.addEventListener('submit', async event => {
-    const form = event.target;
-    if (!form.matches('form')) return;
-    event.preventDefault();
-    if (form.id === 'auth-form') return submitAuth(form);
-    if (form.id === 'create-group') return createGroup(form);
-    if (form.id === 'join-group') return joinGroup(form);
-    if (form.id === 'task-form') return submitTask(form);
-    if (form.id === 'lesson-form') return submitLesson(form);
-    if (form.id === 'cycle-form') return saveCycle(form);
-  });
-
-  root.addEventListener('change', async event => {
-    if (event.target.matches('[data-progress]')) return updateProgress(event.target);
-    if (event.target.matches('[data-attendance-status]')) {
-      return saveOfficialAttendance(event.target.dataset.student, event.target.dataset.lesson, event.target.value);
-    }
-    if (event.target.id === 'attendance-date' && event.target.value) {
-      state.attendanceDate = event.target.value;
-      state.selectedAttendanceLessonId = null;
-      try { await loadWorkspace(); renderWorkspace(); }
-      catch (error) { notify(error.message, 'error'); }
-    }
-    if (event.target.id === 'group-switch') {
-      try { await selectGroup(event.target.value); }
-      catch (error) { notify(error.message, 'error'); }
-    }
-  });
-}
-
-async function submitAuth(form) {
-  const data = new FormData(form);
-  const username = normalizeUsername(data.get('username'));
-  const password = String(data.get('password') || '');
-
-  if (!validUsername(username)) {
-    notify('Логин: 3–24 символа, начни с буквы или цифры. Разрешены латинские буквы, цифры, точка, дефис и подчёркивание.', 'error');
-    return;
-  }
-
-  // The visible login is mapped to a deterministic internal Firebase email alias.
-  const authIdentifier = authEmailForUsername(username);
-  setBusy(true);
-  try {
-    if (data.has('full_name')) {
-      const fullName = String(data.get('full_name') || '').trim();
-      const patronymic = '';
-      const displayName = fullName;
-      const credential = await createUserWithEmailAndPassword(auth, authIdentifier, password);
-      await updateProfile(credential.user, { displayName });
-      const profileRef = doc(db, 'users', credential.user.uid);
-      const existingProfile = await getDoc(profileRef);
-      if (existingProfile.exists()) {
-        await updateDoc(profileRef, { fullName, patronymic, username, updatedAt: serverTimestamp() });
-      } else {
-        await setDoc(profileRef, {
-          fullName,
-          patronymic,
-          username,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        });
-      }
-      state.profile = { fullName, patronymic, username };
-      await boot(credential.user);
-    } else {
-      const credential = await signInWithEmailAndPassword(auth, authIdentifier, password);
-      await boot(credential.user);
-    }
-  } catch (error) {
-    const message = error.code === 'auth/email-already-in-use' ? 'Этот логин уже занят. Выбери другой.' :
-      error.code === 'auth/invalid-credential' ? 'Неверный логин или пароль.' :
-      error.code === 'auth/weak-password' ? 'Пароль должен содержать не менее 8 символов.' :
-      error.code === 'auth/invalid-email' ? 'Проверь логин: используй латинские буквы, цифры, точку, дефис или подчёркивание.' :
-      error.message || 'Ошибка авторизации.';
-    notify(message, 'error');
-  } finally {
-    setBusy(false);
-  }
-}
-
-async function createGroup(form) {
-  const name = String(new FormData(form).get('name') || '').trim();
-  setBusy(true);
-  try {
-    const groupRef = doc(collection(db, 'groups'));
-    const inviteCode = makeInviteCode();
-    const groupId = groupRef.id;
-    const userRef = doc(db, 'users', state.user.uid);
-    const memberRef = doc(db, 'groups', groupId, 'members', state.user.uid);
-    const userGroupRef = doc(db, 'users', state.user.uid, 'groups', groupId);
-    const inviteRef = doc(db, 'inviteCodes', inviteCode);
-    const cycleStart = mondayOf(new Date());
-
-    const batch = writeBatch(db);
-    batch.set(groupRef, {
-      name,
-      createdBy: state.user.uid,
-      studyCycleStart: cycleStart,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    });
-    batch.set(memberRef, {
-      userId: state.user.uid,
-      displayName: displayFullName(state.profile),
-      role: 'leader',
-      joinedAt: serverTimestamp()
-    });
-    batch.set(userGroupRef, {
-      groupId,
-      name,
-      role: 'leader',
-      inviteCode,
-      joinedAt: serverTimestamp()
-    });
-    batch.set(inviteRef, {
-      groupId,
-      groupName: name,
-      createdBy: state.user.uid,
-      createdAt: serverTimestamp()
-    });
-    await batch.commit();
-    await loadMemberships();
-    await selectGroup(groupId);
-  } catch (error) {
-    notify(error.message || 'Не удалось создать группу.', 'error');
-  } finally {
-    setBusy(false);
-  }
-}
-
-async function joinGroup(form) {
-  const code = String(new FormData(form).get('code') || '').trim().toUpperCase();
-  setBusy(true);
-  try {
-    const inviteSnapshot = await getDoc(doc(db, 'inviteCodes', code));
-    if (!inviteSnapshot.exists()) throw new Error('Код приглашения не найден.');
-    const invite = inviteSnapshot.data();
-    const groupId = invite.groupId;
-    const memberRef = doc(db, 'groups', groupId, 'members', state.user.uid);
-    const existing = await getDoc(memberRef);
-    if (existing.exists()) {
-      await loadMemberships();
-      return selectGroup(groupId);
-    }
-
-    const batch = writeBatch(db);
-    batch.set(memberRef, {
-      userId: state.user.uid,
-      displayName: displayFullName(state.profile),
-      role: 'student',
-      inviteCodeUsed: code,
-      joinedAt: serverTimestamp()
-    });
-    batch.set(doc(db, 'users', state.user.uid, 'groups', groupId), {
-      groupId,
-      name: invite.groupName || 'Учебная группа',
-      role: 'student',
-      joinedAt: serverTimestamp()
-    });
-    await batch.commit();
-    await loadMemberships();
-    await selectGroup(groupId);
-  } catch (error) {
-    notify(error.message || 'Не удалось вступить в группу.', 'error');
-  } finally {
-    setBusy(false);
-  }
-}
-
-async function submitTask(form) {
-  const values = Object.fromEntries(new FormData(form).entries());
-  const lesson = state.lessons.find(item => item.id === values.lessonId) ||
-    state.lessons.find(item => item.id === state.selectedScheduleLessonId);
-  if (!lesson) {
-    notify('Выбери пару из расписания.', 'error');
-    return;
-  }
-  const weekdayNames = ['','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'];
-  const lessonDate = nextLessonDate(lesson);
-  const payload = {
-    subject: lesson.subject,
-    lessonId: lesson.id,
-    weekday: Number(lesson.weekday),
-    weekNumber: Number(lesson.weekNumber),
-    lessonTime: lesson.startsAt || '',
-    lessonDate,
-    title: String(values.title || '').trim(),
-    description: String(values.description || '').trim()
-  };
-  if (!payload.title) {
-    notify('Укажи название домашнего задания.', 'error');
-    return;
-  }
-  setBusy(true);
-  try {
-    if (state.role === 'leader') {
-      await addDoc(groupCollection('tasks'), {
-        ...payload,
-        createdBy: state.user.uid,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        sourceSuggestionId: null
-      });
-      notify('Задание опубликовано.', 'success');
-    } else {
-      await addDoc(groupCollection('taskSuggestions'), {
-        ...payload,
-        submittedBy: state.user.uid,
-        status: 'pending',
-        createdAt: serverTimestamp()
-      });
-      notify('Предложение отправлено старосте.', 'success');
-    }
-    state.selectedScheduleLessonId = lesson.id;
-    await loadWorkspace();
-    renderWorkspace();
-    root.querySelector('#homework-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  } catch (error) {
-    notify(error.message || 'Не удалось сохранить задание.', 'error');
-  } finally {
-    setBusy(false);
-  }
-}
-
-async function reviewSuggestion(suggestionId, approve) {
-  setBusy(true);
-  try {
-    const suggestionRef = groupDocument('taskSuggestions', suggestionId);
-    const taskRef = doc(groupCollection('tasks'));
-    await runTransaction(db, async transaction => {
-      const snapshot = await transaction.get(suggestionRef);
-      if (!snapshot.exists()) throw new Error('Предложение не найдено.');
-      const suggestion = snapshot.data();
-      if (suggestion.status !== 'pending') throw new Error('Предложение уже рассмотрено.');
-
-      if (approve) {
-        transaction.set(taskRef, {
-          subject: suggestion.subject || '',
-          title: suggestion.title,
-          description: suggestion.description || '',
-          lessonDate: suggestion.lessonDate || null,
-          lessonId: suggestion.lessonId || null,
-          weekday: suggestion.weekday || null,
-          weekNumber: suggestion.weekNumber || null,
-          lessonTime: suggestion.lessonTime || '',
-          createdBy: state.user.uid,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          sourceSuggestionId: suggestionId
-        });
-        transaction.update(suggestionRef, {
-          status: 'approved',
-          reviewedBy: state.user.uid,
-          reviewedAt: serverTimestamp(),
-          publishedTaskId: taskRef.id
-        });
-      } else {
-        transaction.update(suggestionRef, {
-          status: 'rejected',
-          reviewedBy: state.user.uid,
-          reviewedAt: serverTimestamp()
-        });
-      }
-    });
-    notify(approve ? 'Задание опубликовано для группы.' : 'Предложение отклонено.', 'success');
-    await loadWorkspace();
-    renderWorkspace();
-  } catch (error) {
-    notify(error.message || 'Не удалось обработать предложение.', 'error');
-  } finally {
-    setBusy(false);
-  }
-}
-
-async function updateProgress(input) {
-  const taskId = input.dataset.progress;
-  const progressId = taskId + '_' + state.user.uid;
-  const progressRef = groupDocument('taskProgress', progressId);
-  const current = state.progress.get(taskId);
-  setBusy(true);
-  try {
-    await setDoc(progressRef, {
-      taskId,
-      userId: state.user.uid,
-      completed: input.checked,
-      updatedAt: serverTimestamp()
-    }, { merge: true });
-    state.progress.set(taskId, input.checked);
-    notify('Личный прогресс сохранён.', 'success');
-  } catch (error) {
-    input.checked = Boolean(current);
-    notify(error.message || 'Не удалось сохранить отметку.', 'error');
-  } finally {
-    setBusy(false);
-  }
-}
-
-async function submitLesson(form) {
-  const values = Object.fromEntries(new FormData(form).entries());
-  const startIndex = Number(values.startPeriod);
-  const periodCount = Number(values.periodCount);
-  const weekNumber = Number(values.weekNumber);
-  const weekday = Number(values.weekday);
-  if (!Number.isInteger(startIndex) || !Number.isInteger(periodCount) ||
-      startIndex < 0 || periodCount < 1 || periodCount > 3 ||
-      startIndex + periodCount > schedulePeriods.length ||
-      ![1,2].includes(weekNumber) || weekday < 1 || weekday > 6) {
-    notify('Проверь выбранное время и продолжительность пары.', 'error');
-    return;
-  }
-  const endIndex = startIndex + periodCount;
-  const overlaps = state.lessons.some(item => {
-    if (Number(item.weekNumber) !== weekNumber || Number(item.weekday) !== weekday) return false;
-    const existingStart = lessonStartIndex(item);
-    if (existingStart < 0) return false;
-    const existingEnd = existingStart + lessonSpan(item, existingStart);
-    return startIndex < existingEnd && existingStart < endIndex;
-  });
-  if (overlaps) {
-    notify('Это время пересекается с уже добавленной парой.', 'error');
-    return;
-  }
-  const startPeriod = schedulePeriods[startIndex];
-  const endPeriod = schedulePeriods[endIndex - 1];
-  setBusy(true);
-  try {
-    await addDoc(groupCollection('lessons'), {
-      subject: String(values.subject || '').trim(),
-      weekday,
-      weekNumber,
-      startsAt: startPeriod.start,
-      endsAt: endPeriod.end,
-      periodCount,
-      room: String(values.room || '').trim(),
-      description: String(values.description || '').trim(),
-      createdBy: state.user.uid,
-      createdAt: serverTimestamp()
-    });
-    state.scheduleEditorSlot = null;
-    notify('Пара добавлена в расписание.', 'success');
-    await loadWorkspace();
-    renderWorkspace();
-  } catch (error) {
-    notify(error.message || 'Не удалось добавить пару.', 'error');
-  } finally {
-    setBusy(false);
-  }
-}
-
-async function deleteLesson(lessonId) {
   if (state.role !== 'leader') {
-    notify('Удалять пары может только староста.', 'error');
-    return;
+    return heading('ПОСЕЩАЕМОСТЬ', 'Моя посещаемость', 'Предварительная явка на занятия группы.') + renderStudentAttendance(lessons, date);
   }
-  const lesson = state.lessons.find(item => item.id === lessonId);
-  if (!lesson) {
-    notify('Пара уже отсутствует в расписании.', 'error');
-    return;
-  }
-  const label = [lesson.subject, lesson.startsAt].filter(Boolean).join(' · ');
-  const confirmed = window.confirm(
-    'Удалить пару «' + label + '»?\n\nСвязанные предварительные ответы и официальные отметки посещаемости также будут удалены.'
-  );
-  if (!confirmed) return;
 
-  setBusy(true);
-  try {
-    const [responses, records] = await Promise.all([
-      getDocs(query(collection(db, 'groups', state.group.id, 'attendanceResponses'), where('lessonId', '==', lessonId))),
-      getDocs(query(collection(db, 'groups', state.group.id, 'attendanceRecords'), where('lessonId', '==', lessonId)))
-    ]);
-    const refs = [
-      ...responses.docs.map(item => item.ref),
-      ...records.docs.map(item => item.ref),
-      groupDocument('lessons', lessonId)
-    ];
-
-    // Keep each Firestore batch comfortably below the 500-write limit.
-    for (let offset = 0; offset < refs.length; offset += 450) {
-      const batch = writeBatch(db);
-      refs.slice(offset, offset + 450).forEach(ref => batch.delete(ref));
-      await batch.commit();
-    }
-
-    if (state.selectedScheduleLessonId === lessonId) state.selectedScheduleLessonId = null;
-    notify('Пара и связанные отметки удалены.', 'success');
-    await loadWorkspace();
-    renderWorkspace();
-  } catch (error) {
-    console.error('STUDIUM delete lesson failed:', error);
-    notify(error.message || 'Не удалось удалить пару. Проверь правила Firestore.', 'error');
-  } finally {
-    setBusy(false);
-  }
+  const selected = lessons.find(item => item.id === state.selectedAttendanceLessonId) || null;
+  const cards = lessons.map((lesson,index) => {
+    const responses = state.attendance.filter(item => item.lessonId === lesson.id && item.lessonDate === date);
+    const attending = responses.filter(item => item.response === 'will_attend').length;
+    const missing = responses.filter(item => item.response === 'will_miss').length;
+    return '<button type="button" class="attendance-lesson-card' + (selected?.id === lesson.id ? ' selected' : '') +
+      '" data-attendance-lesson="' + esc(lesson.id) + '"><span>' + (index + 1) + ' пара · ' +
+      esc(lesson.startsAt || '') + (lesson.endsAt ? '–' + esc(lesson.endsAt) : '') +
+      '</span><strong>' + esc(lesson.subject) + '</strong><small>Будут: ' + attending + ' · Не будут: ' + missing + '</small></button>';
+  }).join('');
+  const [year,month,day] = date.split('-').map(Number);
+  const dateLabel = new Date(year,month-1,day,12).toLocaleDateString('ru-RU',{day:'numeric',month:'long',weekday:'long'});
+  return heading('ПОСЕЩАЕМОСТЬ', 'Журнал старосты', 'Выбери пару и отмечай посещаемость по списку группы.') +
+    '<div class="date-picker attendance-date-leader"><label>Дата<input type="date" id="attendance-date" value="' + date + '"></label><span>' + esc(dateLabel) + ' · ' + (week === 1 ? 'Первая' : 'Вторая') + ' учебная неделя</span></div>' +
+    (lessons.length ? '<div class="attendance-lesson-grid">' + cards + '</div>' : empty('На эту дату пар нет', 'Выбери другую дату или проверь расписание группы.')) +
+    (selected ? renderAttendanceRoster(selected) : (lessons.length ? '<p class="muted small attendance-pick-hint">Нажми на пару выше — откроется список группы по алфавиту.</p>' : ''));
 }
 
 async function saveAttendance(lessonId, response) {
   const responseId = lessonId + '_' + state.attendanceDate + '_' + state.user.uid;
-  const responseRef = groupDocument('attendanceResponses', responseId);
+  const responseRef = doc(db, 'groups', state.group.id, 'attendanceResponses', responseId);
   setBusy(true);
   try {
     await setDoc(responseRef, {
@@ -1202,6 +768,37 @@ async function saveAttendance(lessonId, response) {
     renderWorkspace();
   } catch (error) {
     notify(error.message || 'Не удалось сохранить ответ.', 'error');
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function saveAttendanceForAll(response) {
+  if (state.role === 'leader') return;
+  const [y,m,d] = state.attendanceDate.split('-').map(Number);
+  const weekday = ((new Date(Date.UTC(y,m-1,d)).getUTCDay()+6)%7)+1;
+  const week = lessonWeekFor(state.attendanceDate);
+  const lessons = state.lessons.filter(item => Number(item.weekday) === weekday && Number(item.weekNumber) === week);
+  if (!lessons.length) return notify('На эту дату пар нет.');
+  setBusy(true);
+  try {
+    const batch = writeBatch(db);
+    lessons.forEach(lesson => {
+      const responseId = lesson.id + '_' + state.attendanceDate + '_' + state.user.uid;
+      batch.set(doc(db, 'groups', state.group.id, 'attendanceResponses', responseId), {
+        lessonId: lesson.id,
+        userId: state.user.uid,
+        lessonDate: state.attendanceDate,
+        response,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    });
+    await batch.commit();
+    notify(response === 'will_attend' ? 'Отмечено: буду на всех парах.' : 'Отмечено: не буду на всех парах.', 'success');
+    await loadWorkspace();
+    renderWorkspace();
+  } catch (error) {
+    notify(error.message || 'Не удалось сохранить ответы на все пары.', 'error');
   } finally {
     setBusy(false);
   }
