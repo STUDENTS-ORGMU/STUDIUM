@@ -418,24 +418,39 @@ async function loadWorkspace() {
   state.materials = materials.docs.map(item => ({ id: item.id, ...item.data() }));
 }
 
+function sidebarIcon(name) {
+  const paths = {
+    overview: '<path d="m3 10 9-7 9 7"/><path d="M5 9v11h14V9"/>',
+    deadlines: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="m9 15 2 2 4-4"/>',
+    schedule: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M8 14h3M14 14h2M8 17h3"/>',
+    moderation: '<path d="M9 12l2 2 4-4"/><path d="M12 3 4 6v5c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6z"/>',
+    attendance: '<path d="M4 19V5M4 19h16"/><path d="M8 15v-4M12 15V7M16 15V9"/>',
+    library: '<path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v18H6.5A2.5 2.5 0 0 1 4 17.5z"/><path d="M4 6h16M8 10h8M8 14h8"/>',
+    manage: '<circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1 1.4 1.1-1.4 2.4-1.7-.7a8 8 0 0 1-1.7 1l-.3 1.8h-2.8l-.3-1.8a8 8 0 0 1-1.7-1l-1.7.7-1.4-2.4 1.4-1.1a7 7 0 0 1 0-2l-1.4-1.1 1.4-2.4 1.7.7a8 8 0 0 1 1.7-1l.3-1.8h2.8l.3 1.8a8 8 0 0 1 1.7 1l1.7-.7 1.4 2.4-1.4 1.1a7 7 0 0 1 0 2z"/>'
+  };
+  return '<svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (paths[name] || '') + '</svg>';
+}
+
 function navButton(tab, icon, title) {
-  return '<button type="button" class="' + (state.tab === tab ? 'active' : '') + '" data-tab="' + tab + '"><span>' + icon + '</span>' + title + '</button>';
+  return '<button type="button" class="' + (state.tab === tab ? 'active' : '') + '" data-tab="' + tab + '">' + sidebarIcon(icon) + '<span class="nav-label">' + title + '</span></button>';
 }
 
 function renderWorkspace() {
   const leader = state.role === 'leader';
   const name = displayFullName(state.profile);
-  const tabs = [
-    navButton('overview', '⌂', 'Обзор'),
-    navButton('deadlines', '▣', 'Дедлайны'),
-    navButton('schedule', '▦', 'Расписание и ДЗ'),
-    ...(leader ? [navButton('moderation', '◇', 'Модерация <b>' + state.suggestions.filter(item => item.status === 'pending').length + '</b>')] : []),
-    navButton('attendance', '◷', 'Посещаемость'),
-    navButton('library', '▤', 'Материалы'),
-    navButton('manage', '⚙', 'Группа')
+  const mainTabs = [
+    navButton('overview', 'overview', 'Обзор'),
+    navButton('deadlines', 'deadlines', 'Дедлайны'),
+    navButton('schedule', 'schedule', 'Расписание и ДЗ')
+  ].join('');
+  const groupTabs = [
+    ...(leader ? [navButton('moderation', 'moderation', 'Модерация <b>' + state.suggestions.filter(item => item.status === 'pending').length + '</b>')] : []),
+    navButton('attendance', 'attendance', 'Посещаемость'),
+    navButton('library', 'library', 'Материалы'),
+    navButton('manage', 'manage', 'Группа')
   ].join('');
 
-  frame('<div class="layout"><aside class="sidebar"><a class="wordmark" href="#">STUDIUM</a><div class="group-box"><small>УЧЕБНАЯ ГРУППА</small><strong>' + esc(state.group.name) + '</strong><span class="role">' + (leader ? 'Староста' : 'Студент') + '</span></div><nav>' + tabs + '</nav><div class="side-user"><button type="button" class="side-user-profile" data-tab="profile"><span class="avatar">' + esc(name.slice(0,1).toUpperCase()) + '</span><span class="side-user-copy"><strong>' + esc(name) + '</strong><small>' + esc(state.profile?.username ? '@' + state.profile.username : '') + '</small><em>Мой профиль →</em></span></button><button class="btn ghost" data-action="logout">Выйти</button></div></aside><main class="main"><header class="mobile-head"><button class="btn ghost" data-action="menu">☰</button><a class="wordmark" href="#">STUDIUM</a><span class="role">' + (leader ? 'Староста' : 'Студент') + '</span></header><div class="content">' + renderCurrentTab() + '</div></main></div>');
+  frame('<div class="layout"><aside class="sidebar"><a class="wordmark" href="#">STUDIUM</a><div class="group-box"><div class="group-box-heading"><small>ТВОЯ ГРУППА</small>' + sidebarIcon('manage') + '</div><strong>' + esc(state.group.name) + '</strong><div class="group-box-meta"><span>' + (leader ? 'Староста' : 'Студент') + '</span><span>' + state.groupMembers.length + ' участн.</span></div></div><nav><div class="nav-section"><small>ОСНОВНОЕ</small>' + mainTabs + '</div><div class="nav-section"><small>УПРАВЛЕНИЕ ГРУППОЙ</small>' + groupTabs + '</div></nav><div class="side-user"><button type="button" class="side-user-profile" data-tab="profile"><span class="avatar">' + esc(name.slice(0,1).toUpperCase()) + '</span><span class="side-user-copy"><strong>' + esc(name) + '</strong><small>' + esc(state.profile?.username ? '@' + state.profile.username : '') + '</small><em>Мой профиль →</em></span></button><button class="btn ghost" data-action="logout">Выйти</button></div></aside><main class="main"><header class="mobile-head"><button class="btn ghost" data-action="menu">☰</button><a class="wordmark" href="#">STUDIUM</a><span class="role">' + (leader ? 'Староста' : 'Студент') + '</span></header><div class="content">' + renderCurrentTab() + '</div></main></div>');
 }
 
 function heading(eyebrow, title, subtitle, action = '') {
