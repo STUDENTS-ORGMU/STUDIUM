@@ -236,7 +236,7 @@ async function loadWorkspace() {
   const progressRef = collection(db, 'groups', gid, 'taskProgress');
   const attendanceRef = collection(db, 'groups', gid, 'attendanceResponses');
 
-  const taskQuery = query(tasksRef, orderBy('dueDate', 'asc'));
+  const taskQuery = query(tasksRef, orderBy('lessonDate', 'asc'));
   const lessonQuery = query(lessonsRef, orderBy('weekday', 'asc'), orderBy('weekNumber', 'asc'), orderBy('startsAt', 'asc'));
   const suggestionQuery = state.role === 'leader'
     ? query(suggestionsRef, where('status', '==', 'pending'), orderBy('createdAt', 'desc'))
@@ -263,7 +263,8 @@ async function loadWorkspace() {
     readQuery('Предварительная посещаемость', getDocs(attendanceQuery))
   ]);
 
-  state.tasks = tasks.docs.map(item => ({ id: item.id, ...item.data() }));
+  state.tasks = tasks.docs.map(item => ({ id: item.id, ...item.data() }))
+    .sort((a,b) => String(a.lessonDate || a.dueDate || '').localeCompare(String(b.lessonDate || b.dueDate || '')));
   state.suggestions = suggestions.docs.map(item => ({ id: item.id, ...item.data() }));
   state.lessons = lessons.docs.map(item => ({ id: item.id, ...item.data() }));
   state.progress = new Map(progress.docs.map(item => [item.data().taskId, item.data().completed === true]));
@@ -312,22 +313,66 @@ function renderCurrentTab() {
 function renderOverview() {
   const pending = state.suggestions.filter(item => item.status === 'pending').length;
   const completed = state.tasks.filter(item => state.progress.get(item.id)).length;
-  const nextTask = state.tasks.find(item => item.dueDate);
+  const nextTask = state.tasks.find(item => item.lessonDate);
   return heading('STUDIUM / ОБЗОР', 'Добро пожаловать', esc(displayFullName(state.profile)), '<button class="btn primary" data-tab="tasks">Открыть задания →</button>') +
-    '<div class="stats"><article><small>Заданий в группе</small><strong>' + state.tasks.length + '</strong></article><article><small>Выполнено тобой</small><strong>' + completed + '</strong></article><article><small>Ближайший дедлайн</small><strong class="date-stat">' + esc(dateText(nextTask?.dueDate)) + '</strong></article><article><small>На модерации</small><strong>' + (state.role === 'leader' ? pending : '—') + '</strong></article></div>' +
+    '<div class="stats"><article><small>Заданий в группе</small><strong>' + state.tasks.length + '</strong></article><article><small>Выполнено тобой</small><strong>' + completed + '</strong></article><article><small>Ближайшая пара</small><strong class="date-stat">' + esc(nextTask ? dateText(nextTask.lessonDate) : 'Нет заданий') + '</strong></article><article><small>На модерации</small><strong>' + (state.role === 'leader' ? pending : '—') + '</strong></article></div>' +
     '<section class="section"><div class="section-title"><h2>Ближайшие задания</h2><button class="text-btn" data-tab="tasks">Все задания →</button></div>' + taskCards(state.tasks.slice(0,3)) + '</section>';
 }
 
 function taskCards(items) {
   if (!items.length) return empty('Пока нет заданий', 'Добавь задание или предложи его старосте.');
+  const weekdayNames = ['','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'];
   return '<div class="task-list">' + items.map(task => {
     const done = state.progress.get(task.id) === true;
-    return '<article class="task-card ' + (done ? 'done' : '') + '"><div class="task-copy"><small>' + esc(task.subject || 'Без предмета') + '</small><h3>' + esc(task.title) + '</h3><p>' + esc(task.description || '') + '</p><div class="meta"><span>Срок: ' + esc(dateText(task.dueDate)) + '</span></div></div><label class="check"><input type="checkbox" data-progress="' + esc(task.id) + '" ' + (done ? 'checked' : '') + '> Выполнено</label></article>';
+    const lesson = state.lessons.find(item => item.id === task.lessonId);
+    const weekday = task.weekday || lesson?.weekday;
+    const dayLabel = weekdayNames[weekday] || '';
+    const dateLabel = task.lessonDate ? dateText(task.lessonDate) : 'Дата пары не указана';
+    const timeLabel = task.lessonTime || lesson?.startsAt || '';
+    const pairLabel = [dayLabel, dateLabel, timeLabel].filter(Boolean).join(' · ');
+    return '<article class="task-card ' + (done ? 'done' : '') + '"><div class="task-copy"><small>' + esc(task.subject || 'Без предмета') + '</small><h3>' + esc(task.title) + '</h3><p>' + esc(task.description || '') + '</p><div class="meta"><span>Пара: ' + esc(pairLabel || dateLabel) + '</span></div></div><label class="check"><input type="checkbox" data-progress="' + esc(task.id) + '" ' + (done ? 'checked' : '') + '> Выполнено</label></article>';
   }).join('') + '</div>';
 }
 
 function taskForm() {
-  return '<section class="panel compose"><div><p class="eyebrow">НОВОЕ ЗАДАНИЕ</p><h2>' + (state.role === 'leader' ? 'Опубликовать ДЗ' : 'Предложить ДЗ') + '</h2><p class="muted">' + (state.role === 'leader' ? 'Задание сразу появится у всей группы.' : 'Староста проверит описание и опубликует задание для группы.') + '</p></div><form id="task-form" class="form"><div class="two"><label>Предмет<input name="subject" maxlength="120" placeholder="Например, Анатомия"></label><label>Дата пары<input name="lessonDate" type="date"></label></div><label>Название задания<input name="title" required maxlength="180" placeholder="Что нужно сделать?"></label><label>Описание<textarea name="description" rows="3" placeholder="Дополнительные требования, страницы, вопросы…"></textarea></label><label>Срок выполнения<input name="dueDate" type="date"></label><button class="btn primary">' + (state.role === 'leader' ? 'Опубликовать' : 'Отправить старосте') + '</button></form></section>';
+  const weekdayNames = ['','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'];
+  const choices = state.lessons.map(lesson => ({
+    lesson,
+    lessonDate: nextLessonDate(lesson)
+  })).sort((a,b) => a.lessonDate.localeCompare(b.lessonDate) ||
+    String(a.lesson.startsAt).localeCompare(String(b.lesson.startsAt)));
+  if (!choices.length) {
+    return '<section class="panel compose"><div><p class="eyebrow">НОВОЕ ЗАДАНИЕ</p><h2>' +
+      (state.role === 'leader' ? 'Опубликовать ДЗ' : 'Предложить ДЗ') +
+      '</h2><p class="muted">Сначала добавь пары в разделе «Расписание», затем привязывай к ним домашние задания.</p></div>' +
+      '<p class="task-no-lessons">В расписании пока нет пар. <button class="text-btn" type="button" data-tab="schedule">Открыть расписание →</button></p></section>';
+  }
+  const selected = choices[0];
+  const options = choices.map(({lesson,lessonDate}) =>
+    '<option value="' + esc(lesson.id) + '" data-subject="' + esc(lesson.subject) +
+    '" data-weekday="' + lesson.weekday + '" data-weekday-label="' + esc(weekdayNames[lesson.weekday] || '') +
+    '" data-lesson-date="' + lessonDate + '" data-week-number="' + lesson.weekNumber +
+    '" data-lesson-time="' + esc(lesson.startsAt || '') + '">' +
+    esc(weekdayNames[lesson.weekday] || 'День не указан') + ' · ' + esc(dateText(lessonDate)) +
+    ' · ' + esc(lesson.startsAt || '') + ' · ' + esc(lesson.subject) +
+    ' (' + (lesson.weekNumber === 2 ? 'II неделя' : 'I неделя') + ')</option>'
+  ).join('');
+  return '<section class="panel compose task-compose"><div><p class="eyebrow">НОВОЕ ЗАДАНИЕ</p><h2>' +
+    (state.role === 'leader' ? 'Опубликовать ДЗ' : 'Предложить ДЗ') +
+    '</h2><p class="muted">' +
+    (state.role === 'leader' ? 'Выбери пару из расписания — предмет, день и дата заполнятся автоматически.' : 'Выбери пару, к которой относится предложение. Староста увидит её дату и предмет.') +
+    '</p></div><form id="task-form" class="form task-form">' +
+    '<label>Пара из расписания<select id="task-lesson-select" name="lessonId" required>' + options + '</select></label>' +
+    '<div class="task-lesson-details">' +
+      '<label>Предмет<input name="subject" value="' + esc(selected.lesson.subject) + '" readonly></label>' +
+      '<label>День недели<input name="weekdayLabel" value="' + esc(weekdayNames[selected.lesson.weekday] || '') + '" readonly></label>' +
+      '<label>Дата пары<input name="lessonDate" type="date" value="' + selected.lessonDate + '" readonly></label>' +
+      '<label>Время<input name="lessonTime" value="' + esc(selected.lesson.startsAt || '') + '" readonly></label>' +
+    '</div>' +
+    '<label>Название задания<input name="title" required maxlength="180" placeholder="Что нужно сделать?"></label>' +
+    '<label>Описание<textarea name="description" rows="3" placeholder="Дополнительные требования, страницы, вопросы…"></textarea></label>' +
+    '<button class="btn primary">' + (state.role === 'leader' ? 'Опубликовать' : 'Отправить старосте') + '</button>' +
+    '</form></section>';
 }
 
 function renderTasks() {
@@ -337,8 +382,9 @@ function renderTasks() {
 function renderModeration() {
   const pending = state.suggestions.filter(item => item.status === 'pending');
   const reviewed = state.suggestions.filter(item => item.status !== 'pending');
+  const weekdayNames = ['','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'];
   return heading('ПАНЕЛЬ СТАРОСТЫ', 'Модерация ДЗ', 'Проверь предложения студентов перед публикацией.') +
-    (pending.length ? '<div class="moderation">' + pending.map(item => '<article class="panel moderation-card"><div class="meta"><span>' + esc(item.subject || 'Без предмета') + '</span><span>Предложено ' + esc(dateText(item.createdAt)) + '</span></div><h2>' + esc(item.title) + '</h2><p>' + esc(item.description || '') + '</p><div class="meta"><span>Пара: ' + esc(dateText(item.lessonDate)) + '</span><span>Срок: ' + esc(dateText(item.dueDate)) + '</span></div><div class="actions"><button class="btn primary" data-review="approve" data-id="' + esc(item.id) + '">Одобрить и опубликовать</button><button class="btn danger" data-review="reject" data-id="' + esc(item.id) + '">Отклонить</button></div></article>').join('') + '</div>' : empty('Новых предложений нет', 'Когда студент предложит домашнее задание, оно появится здесь.')) +
+    (pending.length ? '<div class="moderation">' + pending.map(item => '<article class="panel moderation-card"><div class="meta"><span>' + esc(item.subject || 'Без предмета') + '</span><span>Предложено ' + esc(dateText(item.createdAt)) + '</span></div><h2>' + esc(item.title) + '</h2><p>' + esc(item.description || '') + '</p><div class="meta"><span>Пара: ' + esc([weekdayNames[item.weekday] || '', dateText(item.lessonDate), item.lessonTime || ''].filter(Boolean).join(' · ')) + '</span></div><div class="actions"><button class="btn primary" data-review="approve" data-id="' + esc(item.id) + '">Одобрить и опубликовать</button><button class="btn danger" data-review="reject" data-id="' + esc(item.id) + '">Отклонить</button></div></article>').join('') + '</div>' : empty('Новых предложений нет', 'Когда студент предложит домашнее задание, оно появится здесь.')) +
     (reviewed.length ? '<section class="section"><h2>Рассмотренные предложения</h2><div class="history">' + reviewed.slice(0,8).map(item => '<div><span>' + esc(item.title) + '</span><span class="status ' + item.status + '">' + (item.status === 'approved' ? 'Опубликовано' : 'Отклонено') + '</span></div>').join('') + '</div></section>' : '');
 }
 
@@ -520,6 +566,31 @@ function lessonWeekFor(date) {
   return ((weeks % 2) + 2) % 2 + 1;
 }
 
+function nextLessonDate(lesson) {
+  const now = new Date();
+  const candidate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const currentWeekday = ((candidate.getDay() + 6) % 7) + 1;
+  const targetWeekday = Number(lesson.weekday);
+  const daysAhead = (targetWeekday - currentWeekday + 7) % 7;
+  candidate.setDate(candidate.getDate() + daysAhead);
+
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  const lessonMinutes = timeToMinutes(lesson.startsAt);
+  if (daysAhead === 0 && lessonMinutes !== null && currentMinutes >= lessonMinutes) {
+    candidate.setDate(candidate.getDate() + 7);
+  }
+
+  const toISO = value => [
+    value.getFullYear(),
+    String(value.getMonth() + 1).padStart(2, '0'),
+    String(value.getDate()).padStart(2, '0')
+  ].join('-');
+  if (lessonWeekFor(toISO(candidate)) !== Number(lesson.weekNumber)) {
+    candidate.setDate(candidate.getDate() + 7);
+  }
+  return toISO(candidate);
+}
+
 function renderAttendance() {
   const date = state.attendanceDate;
   const [y,m,d] = date.split('-').map(Number);
@@ -597,6 +668,17 @@ function bindEvents() {
   });
 
   root.addEventListener('change', async event => {
+    if (event.target.id === 'task-lesson-select') {
+      const form = event.target.closest('#task-form');
+      const option = event.target.selectedOptions[0];
+      if (form && option) {
+        form.elements.subject.value = option.dataset.subject || '';
+        form.elements.weekdayLabel.value = option.dataset.weekdayLabel || '';
+        form.elements.lessonDate.value = option.dataset.lessonDate || '';
+        form.elements.lessonTime.value = option.dataset.lessonTime || '';
+      }
+      return;
+    }
     if (event.target.matches('[data-progress]')) return updateProgress(event.target);
     if (event.target.id === 'attendance-date' && event.target.value) {
       state.attendanceDate = event.target.value;
@@ -752,13 +834,27 @@ async function joinGroup(form) {
 
 async function submitTask(form) {
   const values = Object.fromEntries(new FormData(form).entries());
+  const lesson = state.lessons.find(item => item.id === values.lessonId);
+  if (!lesson) {
+    notify('Выбери пару из расписания.', 'error');
+    return;
+  }
+  const weekdayNames = ['','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'];
+  const lessonDate = nextLessonDate(lesson);
   const payload = {
-    subject: String(values.subject || '').trim(),
+    subject: lesson.subject,
+    lessonId: lesson.id,
+    weekday: Number(lesson.weekday),
+    weekNumber: Number(lesson.weekNumber),
+    lessonTime: lesson.startsAt || '',
+    lessonDate,
     title: String(values.title || '').trim(),
-    description: String(values.description || '').trim(),
-    lessonDate: values.lessonDate || null,
-    dueDate: values.dueDate || null
+    description: String(values.description || '').trim()
   };
+  if (!payload.title) {
+    notify('Укажи название домашнего задания.', 'error');
+    return;
+  }
   setBusy(true);
   try {
     if (state.role === 'leader') {
@@ -805,7 +901,10 @@ async function reviewSuggestion(suggestionId, approve) {
           title: suggestion.title,
           description: suggestion.description || '',
           lessonDate: suggestion.lessonDate || null,
-          dueDate: suggestion.dueDate || null,
+          lessonId: suggestion.lessonId || null,
+          weekday: suggestion.weekday || null,
+          weekNumber: suggestion.weekNumber || null,
+          lessonTime: suggestion.lessonTime || '',
           createdBy: state.user.uid,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
