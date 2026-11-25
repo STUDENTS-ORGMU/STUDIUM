@@ -1,18 +1,9 @@
 import './style.css';
 import { downloadAttendanceReport } from './attendance-report.js';
 import { supabase, supabaseConfigured } from './supabase.js';
-import { auth, db, firebaseConfigured } from './firebase.js';
+import { db } from './firebase.js';
 import { signUpWithUsername, signInWithUsername, signOutFromSupabase, getCurrentSupabaseProfile } from './supabase-auth.js';
-import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  onAuthStateChanged,
-  signOut,
-  updateProfile,
-  EmailAuthProvider,
-  reauthenticateWithCredential,
-  updatePassword
-} from 'firebase/auth';
+
 import {
   addDoc,
   collection,
@@ -34,59 +25,10 @@ import {
 const root = document.querySelector('#app');
 const normalizeUsername = value => String(value ?? '').trim().toLowerCase();
 const validUsername = value => /^[a-z0-9][a-z0-9._-]{2,23}$/.test(value);
-// Firebase Email/Password requires an email-shaped identifier. This reserved
-// project-local alias is internal only; users enter and see their username.
-const authEmailForUsername = username => `${username}@${import.meta.env.VITE_FIREBASE_AUTH_DOMAIN}`;
-const usernameAliasRef = username => doc(db, 'usernameAliases', normalizeUsername(username));
+
 const fallbackUsername = uid => `student_${String(uid).slice(0, 8).toLowerCase()}`;
 const displayFullName = profile => [profile?.fullName, profile?.patronymic].filter(Boolean).join(' ') || profile?.username || 'Пользователь';
 
-async function readUsernameAlias(username) {
-  try {
-    const snapshot = await getDoc(usernameAliasRef(username));
-    return snapshot.exists() ? snapshot.data() : null;
-  } catch (error) {
-    // Older Firestore rules do not know the usernameAliases collection yet.
-    // Existing sign-in must continue to work until the updated rules are published.
-    if (error.code === 'permission-denied') return null;
-    throw error;
-  }
-}
-
-async function resolveAuthEmailForUsername(username) {
-  const alias = await readUsernameAlias(username);
-  if (alias?.disabled === true) {
-    throw new Error('Этот логин больше не активен. Введи актуальный логин.');
-  }
-  return typeof alias?.authEmail === 'string' && alias.authEmail
-    ? alias.authEmail
-    : authEmailForUsername(username);
-}
-
-async function ensureUsernameAlias(user, username) {
-  const normalized = normalizeUsername(username);
-  if (!validUsername(normalized) || !user?.email) return;
-  try {
-    const aliasRef = usernameAliasRef(normalized);
-    const snapshot = await getDoc(aliasRef);
-    if (snapshot.exists()) {
-      if (snapshot.data().disabled === true) {
-        throw new Error('Этот логин больше не активен. Введи актуальный логин.');
-      }
-      if (snapshot.data().authEmail !== user.email) {
-        throw new Error('Этот логин уже связан с другим аккаунтом. Обратись к администратору STUDIUM.');
-      }
-      return;
-    }
-    await setDoc(aliasRef, { authEmail: user.email, createdAt: serverTimestamp() });
-  } catch (error) {
-    if (error.code === 'permission-denied') {
-      console.warn('STUDIUM: publish the new Firestore usernameAliases rules to enable login aliases.');
-      return;
-    }
-    throw error;
-  }
-}
 
 const today = () => {
   const d = new Date();
@@ -295,7 +237,7 @@ function frame(html) {
 }
 
 function renderSetup() {
-  frame('<main class="setup"><div class="monogram">S</div><p class="eyebrow">НАСТРОЙКА FIREBASE</p><h1>STUDIUM</h1><p class="muted">Подключи Firebase, чтобы запустить учебное пространство.</p><article class="panel"><h2>Добавь параметры Web App</h2><ol><li>Создай отдельный проект в <a href="https://console.firebase.google.com/" target="_blank" rel="noreferrer">Firebase Console</a>.</li><li>Добавь Web App и скопируй значения Firebase config.</li><li>Включи Authentication → Sign-in method → Email/Password.</li><li>Создай базу Firestore в Production mode.</li><li>Хранилище файлов использует бесплатную квоту Cloud Firestore.</li><li>Создай локальный файл <code>.env</code> на основе <code>.env.example</code> и заполни параметры Firebase.</li><li>Опубликуй правила Firestore и индексы из файлов проекта.</li></ol><p class="notice">Firebase Web config и apiKey идентифицируют приложение, но не заменяют защиту данных. Безопасность обеспечивают опубликованные Firestore Security Rules. Не добавляй Admin SDK private key в браузер или GitHub.</p></article></main>');
+  frame('<main class="setup"><div class="monogram">S</div><p class="eyebrow">НАСТРОЙКА SUPABASE</p><h1>STUDIUM</h1><p class="muted">Подключи Supabase, чтобы запустить учебное пространство.</p><article class="panel"><h2>Параметры проекта</h2><ol><li>Создай проект в <a href="https://supabase.com/dashboard" target="_blank" rel="noreferrer">Supabase Dashboard</a>.</li><li>Добавь <code>VITE_SUPABASE_URL</code> и <code>VITE_SUPABASE_PUBLISHABLE_KEY</code> в переменные окружения.</li><li>Примени SQL-миграции из каталога <code>supabase/migrations</code>.</li><li>В настройках Authentication отключи подтверждение email, так как вход выполняется по логину.</li></ol></article></main>');
 }
 
 function renderAuth(mode = 'login', message = '') {
@@ -338,7 +280,7 @@ async function loadMemberships() {
 }
 
 async function boot(user = null) {
-  state.user = user || null;
+  state.user = user ? { ...user, uid: user.id } : null;
   if (!state.user) {
     stopLiveHomeworkUpdates();
     state.profile = null;
@@ -349,62 +291,6 @@ async function boot(user = null) {
   await ensureProfile(state.user);
   await loadMemberships();
   if (!state.memberships.length) return renderOnboarding();
-  const saved = localStorage.getItem('studium-group');
-  const membership = state.memberships.find(item => item.groupId === saved) || state.memberships[0];
-  await selectGroup(membership.groupId);
-}
-
-// Recover a missing leader-membership document only for groups owned by this
-// authenticated user. Firestore Rules independently verify groups/{id}.createdBy.
-async function restoreOwnedLeaderMemberships() {
-  for (const membership of state.memberships) {
-    if (membership.role !== 'leader') continue;
-    const memberRef = doc(db, 'groups', membership.groupId, 'members', state.user.uid);
-    const memberSnapshot = await getDoc(memberRef);
-    if (memberSnapshot.exists()) continue;
-
-    await setDoc(memberRef, {
-      userId: state.user.uid,
-      displayName: displayFullName(state.profile),
-      role: 'leader',
-      joinedAt: serverTimestamp()
-    });
-  }
-}
-
-async function boot(user = auth.currentUser) {
-  if (!firebaseConfigured) return renderSetup();
-  state.user = user || null;
-  if (!state.user) {
-    stopLiveHomeworkUpdates();
-    state.profile = null;
-    state.group = null;
-    state.memberships = [];
-    return renderAuth(state.authMode || 'login');
-  }
-
-  try {
-    await ensureProfile(state.user);
-  } catch (error) {
-    error.message = 'Не удалось прочитать профиль: ' + error.message;
-    throw error;
-  }
-  try {
-    await loadMemberships();
-  } catch (error) {
-    error.message = 'Не удалось загрузить список групп: ' + error.message;
-    throw error;
-  }
-  try {
-    await restoreOwnedLeaderMemberships();
-  } catch (error) {
-    console.warn('STUDIUM leader membership repair:', error);
-    // Continue to the normal workspace path; the read diagnostics below will
-    // identify whether the missing membership is actually blocking access.
-  }
-
-  if (!state.memberships.length) return renderOnboarding();
-
   const saved = localStorage.getItem('studium-group');
   const membership = state.memberships.find(item => item.groupId === saved) || state.memberships[0];
   await selectGroup(membership.groupId);
@@ -1933,14 +1819,14 @@ async function submitAuth(form) {
 }
 
 async function reauthenticateCurrentUser(currentPassword) {
-  if (!state.user?.email) throw new Error('Не удалось определить способ входа аккаунта. Выйди и войди снова.');
-  const credential = EmailAuthProvider.credential(state.user.email, currentPassword);
-  await reauthenticateWithCredential(state.user, credential);
+  const username = state.profile?.username;
+  if (!username) throw new Error('Не удалось определить логин аккаунта.');
+  await signInWithUsername({ username, password: currentPassword });
 }
 
 function profilePermissionMessage(error) {
-  if (error?.code === 'permission-denied') {
-    return 'Firestore отклонил изменение. Опубликуй актуальные правила из firestore.rules в Firebase Console → Firestore Database → Rules.';
+  if (error?.code === '42501' || error?.code === 'PGRST301') {
+    return 'Supabase отклонил изменение из-за прав доступа. Проверь RLS-политики проекта.';
   }
   if (error?.code === 'auth/wrong-password' || error?.code === 'auth/invalid-credential') {
     return 'Текущий пароль указан неверно.';
@@ -1976,9 +1862,9 @@ async function saveProfile(form) {
       member.id === state.user.uid ? { ...member, displayName: fullName } : member
     );
     try {
-      await updateProfile(state.user, { displayName: fullName });
+      await supabase.auth.updateUser({ data: { full_name: fullName } });
     } catch (authProfileError) {
-      console.warn('STUDIUM: Firebase displayName sync skipped; Firestore profile is saved.', authProfileError);
+      console.warn('STUDIUM: Supabase Auth metadata sync skipped.', authProfileError);
     }
     notify('ФИО обновлено во всех твоих группах.', 'success');
     renderWorkspace();
@@ -2066,7 +1952,8 @@ async function savePassword(form) {
   setBusy(true);
   try {
     await reauthenticateCurrentUser(currentPassword);
-    await updatePassword(state.user, newPassword);
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) throw error;
     form.reset();
     notify('Пароль успешно изменён.', 'success');
   } catch (error) {
