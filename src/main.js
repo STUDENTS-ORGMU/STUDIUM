@@ -149,6 +149,24 @@ async function loadMemberships() {
   state.memberships = snapshot.docs.map(item => ({ id: item.id, ...item.data() }));
 }
 
+// Recover a missing leader-membership document only for groups owned by this
+// authenticated user. Firestore Rules independently verify groups/{id}.createdBy.
+async function restoreOwnedLeaderMemberships() {
+  for (const membership of state.memberships) {
+    if (membership.role !== 'leader') continue;
+    const memberRef = doc(db, 'groups', membership.groupId, 'members', state.user.uid);
+    const memberSnapshot = await getDoc(memberRef);
+    if (memberSnapshot.exists()) continue;
+
+    await setDoc(memberRef, {
+      userId: state.user.uid,
+      displayName: displayFullName(state.profile),
+      role: 'leader',
+      joinedAt: serverTimestamp()
+    });
+  }
+}
+
 async function boot(user = auth.currentUser) {
   if (!firebaseConfigured) return renderSetup();
   state.user = user || null;
@@ -159,8 +177,25 @@ async function boot(user = auth.currentUser) {
     return renderAuth(state.authMode || 'login');
   }
 
-  await ensureProfile(state.user);
-  await loadMemberships();
+  try {
+    await ensureProfile(state.user);
+  } catch (error) {
+    error.message = 'Не удалось прочитать профиль: ' + error.message;
+    throw error;
+  }
+  try {
+    await loadMemberships();
+  } catch (error) {
+    error.message = 'Не удалось загрузить список групп: ' + error.message;
+    throw error;
+  }
+  try {
+    await restoreOwnedLeaderMemberships();
+  } catch (error) {
+    console.warn('STUDIUM leader membership repair:', error);
+    // Continue to the normal workspace path; the read diagnostics below will
+    // identify whether the missing membership is actually blocking access.
+  }
 
   if (!state.memberships.length) return renderOnboarding();
 
@@ -176,7 +211,13 @@ function renderOnboarding() {
 async function selectGroup(groupId) {
   const membership = state.memberships.find(item => item.groupId === groupId);
   if (!membership) throw new Error('Группа не найдена в твоём списке.');
-  const groupSnapshot = await getDoc(doc(db, 'groups', groupId));
+  let groupSnapshot;
+  try {
+    groupSnapshot = await getDoc(doc(db, 'groups', groupId));
+  } catch (error) {
+    error.message = 'Не удалось открыть группу: ' + error.message;
+    throw error;
+  }
   if (!groupSnapshot.exists()) throw new Error('Учебная группа не найдена.');
   state.group = { id: groupSnapshot.id, ...groupSnapshot.data() };
   state.activeMembership = membership;
@@ -204,9 +245,21 @@ async function loadWorkspace() {
   if (state.role !== 'leader') attendanceConstraints.push(where('userId', '==', state.user.uid));
   const attendanceQuery = query(attendanceRef, ...attendanceConstraints);
 
+  const readQuery = async (label, promise) => {
+    try {
+      return await promise;
+    } catch (error) {
+      console.error('STUDIUM Firestore query failed:', label, error);
+      error.message = label + ': ' + error.message;
+      throw error;
+    }
+  };
   const [tasks, suggestions, lessons, progress, attendance] = await Promise.all([
-    getDocs(taskQuery), getDocs(suggestionQuery), getDocs(lessonQuery),
-    getDocs(progressQuery), getDocs(attendanceQuery)
+    readQuery('Домашние задания', getDocs(taskQuery)),
+    readQuery('Предложения ДЗ', getDocs(suggestionQuery)),
+    readQuery('Расписание', getDocs(lessonQuery)),
+    readQuery('Личный прогресс', getDocs(progressQuery)),
+    readQuery('Предварительная посещаемость', getDocs(attendanceQuery))
   ]);
 
   state.tasks = tasks.docs.map(item => ({ id: item.id, ...item.data() }));
@@ -720,7 +773,7 @@ function start() {
     } catch (error) {
       console.error(error);
       if (error.code === 'permission-denied') {
-        renderAuth('login', 'Firebase подключён, но Firestore не разрешил запрос. Проверь, что опубликованы firestore.rules.');
+        renderAuth('login', 'Вход выполнен, но Firestore отклонил доступ. ' + (error.message || 'Проверь опубликованные правила Firestore.'));
       } else {
         renderAuth('login', 'Не удалось загрузить данные: ' + (error.message || 'неизвестная ошибка'));
       }
