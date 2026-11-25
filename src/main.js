@@ -516,7 +516,7 @@ function renderCurrentTab() {
 function taskDeadlineDate(task) {
   const value = task.dueDate || task.lessonDate || '';
   if (!value) return '';
-  if (typeof value === 'string' && /^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return value;
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
   const date = typeof value?.toDate === 'function' ? value.toDate() : new Date(value);
   if (Number.isNaN(date.getTime())) return '';
   return localDateParts(date).iso;
