@@ -1,6 +1,7 @@
 import './style.css';
 import { downloadAttendanceReport } from './attendance-report.js';
-import { auth, db, firebaseConfigured } from './firebase.js';
+import { supabase, supabaseConfigured } from './supabase.js';
+import { signUpWithUsername, signInWithUsername, signOutFromSupabase, getCurrentSupabaseProfile } from './supabase-auth.js';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -1905,51 +1906,19 @@ async function submitAuth(form) {
   const data = new FormData(form);
   const username = normalizeUsername(data.get('username'));
   const password = String(data.get('password') || '');
-
-  if (!validUsername(username)) {
-    notify('Логин: 3–24 символа, начни с буквы или цифры. Разрешены латинские буквы, цифры, точка, дефис и подчёркивание.', 'error');
-    return;
-  }
-
   setBusy(true);
   try {
     if (data.has('full_name')) {
       const fullName = String(data.get('full_name') || '').trim().replace(/\s+/g, ' ');
-      if (fullName.length < 2) throw new Error('Укажи ФИО полностью.');
-      const existingAlias = await readUsernameAlias(username);
-      if (existingAlias) throw new Error('Этот логин уже занят. Выбери другой.');
-
-      const authIdentifier = authEmailForUsername(username);
-      const credential = await createUserWithEmailAndPassword(auth, authIdentifier, password);
-      await updateProfile(credential.user, { displayName: fullName });
-      const profileRef = doc(db, 'users', credential.user.uid);
-      const existingProfile = await getDoc(profileRef);
-      if (existingProfile.exists()) {
-        await updateDoc(profileRef, { fullName, patronymic: '', username, updatedAt: serverTimestamp() });
-      } else {
-        await setDoc(profileRef, {
-          fullName,
-          patronymic: '',
-          username,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        });
-      }
-      await ensureUsernameAlias(credential.user, username);
-      state.profile = { fullName, patronymic: '', username };
-      await boot(credential.user);
+      await signUpWithUsername({ username, password, fullName });
     } else {
-      const authIdentifier = await resolveAuthEmailForUsername(username);
-      const credential = await signInWithEmailAndPassword(auth, authIdentifier, password);
-      await boot(credential.user);
+      await signInWithUsername({ username, password });
     }
+    const { data: sessionData, error } = await supabase.auth.getSession();
+    if (error) throw error;
+    await boot(sessionData.session?.user || null);
   } catch (error) {
-    const message = error.code === 'auth/email-already-in-use' ? 'Этот логин уже занят. Выбери другой.' :
-      error.code === 'auth/invalid-credential' ? 'Неверный логин или пароль.' :
-      error.code === 'auth/weak-password' ? 'Пароль должен содержать не менее 8 символов.' :
-      error.code === 'auth/invalid-email' ? 'Проверь логин: используй латинские буквы, цифры, точку, дефис или подчёркивание.' :
-      error.message || 'Ошибка авторизации.';
-    notify(message, 'error');
+    notify(error.message || 'Ошибка авторизации.', 'error');
   } finally {
     setBusy(false);
   }
