@@ -54,10 +54,11 @@ service cloud.firestore {
       allow get: if signedIn();
       allow list: if false;
       allow create: if signedIn()
-        && request.resource.data.keys().hasOnly(['groupId', 'createdBy', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['groupId', 'groupName', 'createdBy', 'createdAt'])
         && request.resource.data.createdBy == request.auth.uid
         && existsAfter(/databases/$(database)/documents/groups/$(request.resource.data.groupId))
         && getAfter(/databases/$(database)/documents/groups/$(request.resource.data.groupId)).data.createdBy == request.auth.uid
+        && request.resource.data.groupName == getAfter(/databases/$(database)/documents/groups/$(request.resource.data.groupId)).data.name
         && existsAfter(memberPath(request.resource.data.groupId, request.auth.uid))
         && getAfter(memberPath(request.resource.data.groupId, request.auth.uid)).data.role == 'leader';
       allow update: if false;
@@ -68,16 +69,14 @@ service cloud.firestore {
       allow get: if isMember(groupId);
       allow list: if false;
       allow create: if signedIn()
-        && request.resource.data.keys().hasOnly(['name', 'inviteCode', 'createdBy', 'studyCycleStart', 'createdAt', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['name', 'createdBy', 'studyCycleStart', 'createdAt', 'updatedAt'])
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.name is string
         && request.resource.data.name.size() >= 2
         && request.resource.data.name.size() <= 80
-        && request.resource.data.inviteCode is string
         && existsAfter(memberPath(groupId, request.auth.uid))
         && getAfter(memberPath(groupId, request.auth.uid)).data.role == 'leader'
-        && existsAfter(/databases/$(database)/documents/inviteCodes/$(request.resource.data.inviteCode))
-        && getAfter(/databases/$(database)/documents/inviteCodes/$(request.resource.data.inviteCode)).data.groupId == groupId;
+        ;
       allow update: if isLeader(groupId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'studyCycleStart', 'updatedAt'])
         && request.resource.data.name is string
