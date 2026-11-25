@@ -349,9 +349,8 @@ function taskForm() {
       '<p class="task-no-lessons">В расписании пока нет пар. <button class="text-btn" type="button" data-tab="schedule">Открыть расписание →</button></p></section>';
   }
 
-  let selected = lessons.find(item => item.id === state.selectedTaskLessonId) || lessons[0];
-  state.selectedTaskLessonId = selected.id;
-  const selectedDate = nextLessonDate(selected);
+  const selected = lessons.find(item => item.id === state.selectedTaskLessonId) || null;
+  const selectedDate = selected ? nextLessonDate(selected) : '';
   const weekNames = {1:'Первая',2:'Вторая'};
   const weeks = [1,2].map(week => {
     const days = [1,2,3,4,5,6].map(day => {
@@ -361,7 +360,7 @@ function taskForm() {
       const cards = dayLessons.length
         ? dayLessons.map(lesson => {
             const lessonDate = nextLessonDate(lesson);
-            const isSelected = lesson.id === selected.id;
+            const isSelected = Boolean(selected && lesson.id === selected.id);
             return '<button type="button" class="task-lesson-option' + (isSelected ? ' selected' : '') +
               '" data-action="select-task-lesson" data-id="' + esc(lesson.id) + '" aria-pressed="' + isSelected + '">' +
               '<span class="task-lesson-time">' + esc(lesson.startsAt || '') +
@@ -423,21 +422,22 @@ function taskForm() {
     '<input type="hidden" name="lessonId" value="' + esc(selected.id) + '">' +
     '<div class="task-selected-lesson">' +
       '<div class="task-selected-lesson-head"><span>ВЫБРАННАЯ ПАРА</span><b>✓</b></div>' +
+      '<p class="task-selected-placeholder' + (selected ? ' hidden' : '') + '" data-selected-placeholder>Нажми на занятие в расписании выше — здесь появятся предмет, день, дата и время.</p>' +
       '<div class="task-selected-lesson-details">' +
-        '<div><small>Предмет</small><strong data-selected-subject>' + esc(selected.subject) + '</strong></div>' +
-        '<div><small>День недели</small><strong data-selected-weekday>' + esc(weekdayNames[selected.weekday] || '') + '</strong></div>' +
-        '<div><small>Дата пары</small><strong data-selected-date>' + esc(dateText(selectedDate)) + '</strong></div>' +
-        '<div><small>Время</small><strong data-selected-time>' + esc(selected.startsAt || '') + (selected.endsAt ? '–' + esc(selected.endsAt) : '') + '</strong></div>' +
+        '<div><small>Предмет</small><strong data-selected-subject>' + esc(selected?.subject || '—') + '</strong></div>' +
+        '<div><small>День недели</small><strong data-selected-weekday>' + esc(selected ? weekdayNames[selected.weekday] || '' : '—') + '</strong></div>' +
+        '<div><small>Дата пары</small><strong data-selected-date>' + esc(selected ? dateText(selectedDate) : '—') + '</strong></div>' +
+        '<div><small>Время</small><strong data-selected-time>' + esc(selected ? (selected.startsAt || '') + (selected.endsAt ? '–' + selected.endsAt : '') : '—') + '</strong></div>' +
       '</div>' +
       '<input type="hidden" name="lessonDate" value="' + selectedDate + '">' +
-      '<input type="hidden" name="subject" value="' + esc(selected.subject) + '">' +
-      '<input type="hidden" name="weekday" value="' + Number(selected.weekday) + '">' +
-      '<input type="hidden" name="weekNumber" value="' + Number(selected.weekNumber) + '">' +
-      '<input type="hidden" name="lessonTime" value="' + esc(selected.startsAt || '') + '">' +
+      '<input type="hidden" name="subject" value="' + esc(selected?.subject || '') + '">' +
+      '<input type="hidden" name="weekday" value="' + (selected ? Number(selected.weekday) : '') + '">' +
+      '<input type="hidden" name="weekNumber" value="' + (selected ? Number(selected.weekNumber) : '') + '">' +
+      '<input type="hidden" name="lessonTime" value="' + esc(selected?.startsAt || '') + '">' +
     '</div>' +
     '<label>Название задания<input name="title" required maxlength="180" placeholder="Что нужно сделать?"></label>' +
     '<label>Описание<textarea name="description" rows="3" placeholder="Дополнительные требования, страницы, вопросы…"></textarea></label>' +
-    '<button class="btn primary">' + (state.role === 'leader' ? 'Опубликовать' : 'Отправить старосте') + '</button>' +
+    '<button class="btn primary" type="submit" ' + (selected ? '' : 'disabled') + '>' + (state.role === 'leader' ? 'Опубликовать' : 'Отправить старосте') + '</button>' +
     '</form></section>';
 }
 
@@ -728,6 +728,9 @@ function bindEvents() {
       root.querySelector('[data-selected-weekday]').textContent = weekdayNames[lesson.weekday] || '';
       root.querySelector('[data-selected-date]').textContent = dateText(lessonDate);
       root.querySelector('[data-selected-time]').textContent = (lesson.startsAt || '') + (lesson.endsAt ? '–' + lesson.endsAt : '');
+      root.querySelector('[data-selected-placeholder]')?.classList.add('hidden');
+      const submitButton = form.querySelector('button[type="submit"]');
+      if (submitButton) submitButton.disabled = false;
       root.querySelectorAll('.task-lesson-option').forEach(option => {
         const selectedOption = option.dataset.id === lesson.id;
         option.classList.toggle('selected', selectedOption);
