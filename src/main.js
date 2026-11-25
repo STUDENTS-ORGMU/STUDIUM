@@ -5,7 +5,10 @@ import {
   signInWithEmailAndPassword,
   onAuthStateChanged,
   signOut,
-  updateProfile
+  updateProfile,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updatePassword
 } from 'firebase/auth';
 import {
   addDoc,
@@ -31,8 +34,50 @@ const validUsername = value => /^[a-z0-9][a-z0-9._-]{2,23}$/.test(value);
 // Firebase Email/Password requires an email-shaped identifier. This reserved
 // project-local alias is internal only; users enter and see their username.
 const authEmailForUsername = username => `${username}@${import.meta.env.VITE_FIREBASE_AUTH_DOMAIN}`;
+const usernameAliasRef = username => doc(db, 'usernameAliases', normalizeUsername(username));
 const fallbackUsername = uid => `student_${String(uid).slice(0, 8).toLowerCase()}`;
 const displayFullName = profile => [profile?.fullName, profile?.patronymic].filter(Boolean).join(' ') || profile?.username || 'Пользователь';
+
+async function readUsernameAlias(username) {
+  try {
+    const snapshot = await getDoc(usernameAliasRef(username));
+    return snapshot.exists() ? snapshot.data() : null;
+  } catch (error) {
+    // Older Firestore rules do not know the usernameAliases collection yet.
+    // Existing sign-in must continue to work until the updated rules are published.
+    if (error.code === 'permission-denied') return null;
+    throw error;
+  }
+}
+
+async function resolveAuthEmailForUsername(username) {
+  const alias = await readUsernameAlias(username);
+  return typeof alias?.authEmail === 'string' && alias.authEmail
+    ? alias.authEmail
+    : authEmailForUsername(username);
+}
+
+async function ensureUsernameAlias(user, username) {
+  const normalized = normalizeUsername(username);
+  if (!validUsername(normalized) || !user?.email) return;
+  try {
+    const aliasRef = usernameAliasRef(normalized);
+    const snapshot = await getDoc(aliasRef);
+    if (snapshot.exists()) {
+      if (snapshot.data().authEmail !== user.email) {
+        throw new Error('Этот логин уже связан с другим аккаунтом. Обратись к администратору STUDIUM.');
+      }
+      return;
+    }
+    await setDoc(aliasRef, { authEmail: user.email, createdAt: serverTimestamp() });
+  } catch (error) {
+    if (error.code === 'permission-denied') {
+      console.warn('STUDIUM: publish the new Firestore usernameAliases rules to enable login aliases.');
+      return;
+    }
+    throw error;
+  }
+}
 
 const today = () => {
   const d = new Date();
@@ -268,6 +313,7 @@ async function ensureProfile(user) {
       await updateDoc(profileRef, profilePatch);
     }
     state.profile = profile;
+    await ensureUsernameAlias(user, profile.username);
     return;
   }
   const fromAuth = normalizeUsername((user.email || '').split('@')[0]);
@@ -281,6 +327,7 @@ async function ensureProfile(user) {
   };
   await setDoc(profileRef, profile);
   state.profile = { fullName, patronymic: '', username };
+  await ensureUsernameAlias(user, username);
 }
 
 async function loadMemberships() {
@@ -491,7 +538,7 @@ function renderWorkspace() {
     navButton('manage', '⚙', 'Группа')
   ].join('');
 
-  frame('<div class="layout"><aside class="sidebar"><a class="wordmark" href="#">STUDIUM</a><div class="group-box"><small>УЧЕБНАЯ ГРУППА</small><strong>' + esc(state.group.name) + '</strong><span class="role">' + (leader ? 'Староста' : 'Студент') + '</span></div><nav>' + tabs + '</nav><div class="side-user"><div class="avatar">' + esc(name.slice(0,1).toUpperCase()) + '</div><div><strong>' + esc(name) + '</strong><small>' + esc(state.profile?.username ? '@' + state.profile.username : '') + '</small></div><button class="btn ghost" data-action="logout">Выйти</button></div></aside><main class="main"><header class="mobile-head"><button class="btn ghost" data-action="menu">☰</button><a class="wordmark" href="#">STUDIUM</a><span class="role">' + (leader ? 'Староста' : 'Студент') + '</span></header><div class="content">' + renderCurrentTab() + '</div></main></div>');
+  frame('<div class="layout"><aside class="sidebar"><a class="wordmark" href="#">STUDIUM</a><div class="group-box"><small>УЧЕБНАЯ ГРУППА</small><strong>' + esc(state.group.name) + '</strong><span class="role">' + (leader ? 'Староста' : 'Студент') + '</span></div><nav>' + tabs + '</nav><div class="side-user"><button type="button" class="side-user-profile" data-tab="profile"><span class="avatar">' + esc(name.slice(0,1).toUpperCase()) + '</span><span class="side-user-copy"><strong>' + esc(name) + '</strong><small>' + esc(state.profile?.username ? '@' + state.profile.username : '') + '</small><em>Мой профиль →</em></span></button><button class="btn ghost" data-action="logout">Выйти</button></div></aside><main class="main"><header class="mobile-head"><button class="btn ghost" data-action="menu">☰</button><a class="wordmark" href="#">STUDIUM</a><span class="role">' + (leader ? 'Староста' : 'Студент') + '</span></header><div class="content">' + renderCurrentTab() + '</div></main></div>');
 }
 
 function heading(eyebrow, title, subtitle, action = '') {
@@ -503,6 +550,7 @@ function empty(title, text) {
 }
 
 function renderCurrentTab() {
+  if (state.tab === 'profile') return renderProfile();
   if (state.tab === 'deadlines') return renderDeadlines();
   if (state.tab === 'tasks' || state.tab === 'schedule') return renderSchedule();
   if (state.tab === 'moderation' && state.role === 'leader') return renderModeration();
@@ -511,6 +559,42 @@ function renderCurrentTab() {
     '<div class="grid-two"><article class="panel"><h2>Материалы группы</h2><p class="muted">Подключение файлов через Firebase Storage — следующий этап.</p></article><article class="panel"><h2>Лекции</h2><p class="muted">Отдельная библиотека лекций будет подключена к Firestore и Storage.</p></article></div>';
   if (state.tab === 'manage') return renderManage();
   return renderOverview();
+}
+
+function renderProfile() {
+  const fullName = state.profile?.fullName || displayFullName(state.profile);
+  const username = state.profile?.username || '';
+  return heading('ЛИЧНЫЙ КАБИНЕТ', 'Мой профиль', 'Обнови свои данные. Изменения ФИО появятся в списке группы и журнале посещаемости.') +
+    '<div class="profile-settings-grid">' +
+      '<section class="panel profile-settings-card">' +
+        '<p class="eyebrow">01 · ЛИЧНЫЕ ДАННЫЕ</p><h2>ФИО</h2>' +
+        '<p class="muted">Одно поле для фамилии, имени и отчества.</p>' +
+        '<form id="profile-form" class="form">' +
+          '<label>ФИО полностью<input name="fullName" minlength="2" maxlength="80" autocomplete="name" required value="' + esc(fullName) + '" placeholder="Иванов Иван Иванович"></label>' +
+          '<button class="btn primary" type="submit">Сохранить ФИО</button>' +
+        '</form>' +
+      '</section>' +
+      '<section class="panel profile-settings-card">' +
+        '<p class="eyebrow">02 · ЛОГИН</p><h2>Изменить логин</h2>' +
+        '<p class="muted">Сейчас ты входишь как <strong>@' + esc(username) + '</strong>. Новый логин должен быть свободен.</p>' +
+        '<form id="username-form" class="form">' +
+          '<label>Новый логин<input name="username" type="text" minlength="3" maxlength="24" autocapitalize="none" spellcheck="false" autocomplete="username" pattern="[A-Za-z0-9][A-Za-z0-9._-]{2,23}" required placeholder="Новый логин"></label>' +
+          '<label>Текущий пароль<input name="currentPassword" type="password" autocomplete="current-password" required placeholder="Для подтверждения личности"></label>' +
+          '<small class="muted">После смены входи по новому логину. Пароль останется прежним.</small>' +
+          '<button class="btn secondary" type="submit">Изменить логин</button>' +
+        '</form>' +
+      '</section>' +
+      '<section class="panel profile-settings-card profile-password-card">' +
+        '<p class="eyebrow">03 · БЕЗОПАСНОСТЬ</p><h2>Изменить пароль</h2>' +
+        '<form id="password-form" class="form">' +
+          '<label>Текущий пароль<input name="currentPassword" type="password" autocomplete="current-password" required placeholder="Текущий пароль"></label>' +
+          '<div class="form-two-fields"><label>Новый пароль<input name="newPassword" type="password" minlength="8" autocomplete="new-password" required placeholder="Не менее 8 символов"></label>' +
+          '<label>Повтори новый пароль<input name="confirmPassword" type="password" minlength="8" autocomplete="new-password" required placeholder="Повтори пароль"></label></div>' +
+          '<small class="muted">Минимум 8 символов. Новый пароль вступит в силу сразу после сохранения.</small>' +
+          '<button class="btn secondary" type="submit">Обновить пароль</button>' +
+        '</form>' +
+      '</section>' +
+    '</div>';
 }
 
 function taskDeadlineDate(task) {
@@ -1395,32 +1479,35 @@ async function submitAuth(form) {
     return;
   }
 
-  // The visible login is mapped to a deterministic internal Firebase email alias.
-  const authIdentifier = authEmailForUsername(username);
   setBusy(true);
   try {
     if (data.has('full_name')) {
-      const fullName = String(data.get('full_name') || '').trim();
-      const patronymic = '';
-      const displayName = fullName;
+      const fullName = String(data.get('full_name') || '').trim().replace(/\\s+/g, ' ');
+      if (fullName.length < 2) throw new Error('Укажи ФИО полностью.');
+      const existingAlias = await readUsernameAlias(username);
+      if (existingAlias) throw new Error('Этот логин уже занят. Выбери другой.');
+
+      const authIdentifier = authEmailForUsername(username);
       const credential = await createUserWithEmailAndPassword(auth, authIdentifier, password);
-      await updateProfile(credential.user, { displayName });
+      await updateProfile(credential.user, { displayName: fullName });
       const profileRef = doc(db, 'users', credential.user.uid);
       const existingProfile = await getDoc(profileRef);
       if (existingProfile.exists()) {
-        await updateDoc(profileRef, { fullName, patronymic, username, updatedAt: serverTimestamp() });
+        await updateDoc(profileRef, { fullName, patronymic: '', username, updatedAt: serverTimestamp() });
       } else {
         await setDoc(profileRef, {
           fullName,
-          patronymic,
+          patronymic: '',
           username,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         });
       }
-      state.profile = { fullName, patronymic, username };
+      await ensureUsernameAlias(credential.user, username);
+      state.profile = { fullName, patronymic: '', username };
       await boot(credential.user);
     } else {
+      const authIdentifier = await resolveAuthEmailForUsername(username);
       const credential = await signInWithEmailAndPassword(auth, authIdentifier, password);
       await boot(credential.user);
     }
@@ -1431,6 +1518,135 @@ async function submitAuth(form) {
       error.code === 'auth/invalid-email' ? 'Проверь логин: используй латинские буквы, цифры, точку, дефис или подчёркивание.' :
       error.message || 'Ошибка авторизации.';
     notify(message, 'error');
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function reauthenticateCurrentUser(currentPassword) {
+  if (!state.user?.email) throw new Error('Не удалось определить способ входа аккаунта. Выйди и войди снова.');
+  const credential = EmailAuthProvider.credential(state.user.email, currentPassword);
+  await reauthenticateWithCredential(state.user, credential);
+}
+
+function profilePermissionMessage(error) {
+  if (error?.code === 'permission-denied') {
+    return 'Firestore отклонил изменение. Опубликуй актуальные правила из firestore.rules в Firebase Console → Firestore Database → Rules.';
+  }
+  if (error?.code === 'auth/wrong-password' || error?.code === 'auth/invalid-credential') {
+    return 'Текущий пароль указан неверно.';
+  }
+  if (error?.code === 'auth/requires-recent-login') {
+    return 'Подтверди личность текущим паролем и повтори действие.';
+  }
+  return error?.message || 'Не удалось сохранить изменения профиля.';
+}
+
+async function saveProfile(form) {
+  const fullName = String(new FormData(form).get('fullName') || '').trim().replace(/\\s+/g, ' ');
+  if (fullName.length < 2) return notify('Укажи ФИО полностью.', 'error');
+
+  setBusy(true);
+  try {
+    const membershipSnapshots = await Promise.all(state.memberships.map(membership =>
+      getDoc(doc(db, 'groups', membership.groupId, 'members', state.user.uid))
+    ));
+    const batch = writeBatch(db);
+    batch.update(doc(db, 'users', state.user.uid), {
+      fullName,
+      patronymic: '',
+      updatedAt: serverTimestamp()
+    });
+    membershipSnapshots.forEach(snapshot => {
+      if (snapshot.exists()) batch.update(snapshot.ref, { displayName: fullName });
+    });
+    await batch.commit();
+
+    state.profile = { ...state.profile, fullName, patronymic: '' };
+    state.groupMembers = state.groupMembers.map(member =>
+      member.id === state.user.uid ? { ...member, displayName: fullName } : member
+    );
+    try {
+      await updateProfile(state.user, { displayName: fullName });
+    } catch (authProfileError) {
+      console.warn('STUDIUM: Firebase displayName sync skipped; Firestore profile is saved.', authProfileError);
+    }
+    notify('ФИО обновлено во всех твоих группах.', 'success');
+    renderWorkspace();
+  } catch (error) {
+    notify(profilePermissionMessage(error), 'error');
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function saveUsername(form) {
+  const data = new FormData(form);
+  const username = normalizeUsername(data.get('username'));
+  const currentPassword = String(data.get('currentPassword') || '');
+  const oldUsername = normalizeUsername(state.profile?.username);
+
+  if (!validUsername(username)) {
+    notify('Логин: 3–24 символа, латинские буквы, цифры, точка, дефис или подчёркивание.', 'error');
+    return;
+  }
+  if (username === oldUsername) return notify('Это уже твой текущий логин.');
+  if (!currentPassword) return notify('Введи текущий пароль для подтверждения.', 'error');
+
+  setBusy(true);
+  try {
+    await reauthenticateCurrentUser(currentPassword);
+
+    const newAliasRef = usernameAliasRef(username);
+    const newAliasSnapshot = await getDoc(newAliasRef);
+    if (newAliasSnapshot.exists()) throw new Error('Этот логин уже занят. Выбери другой.');
+
+    const oldAliasRef = usernameAliasRef(oldUsername);
+    const oldAliasSnapshot = await getDoc(oldAliasRef);
+    if (oldAliasSnapshot.exists() && oldAliasSnapshot.data().authEmail !== state.user.email) {
+      throw new Error('Текущий логин связан с другим аккаунтом. Изменение остановлено для защиты доступа.');
+    }
+
+    const batch = writeBatch(db);
+    batch.set(newAliasRef, {
+      authEmail: state.user.email,
+      createdAt: serverTimestamp()
+    });
+    if (oldAliasSnapshot.exists()) batch.delete(oldAliasRef);
+    batch.update(doc(db, 'users', state.user.uid), {
+      username,
+      updatedAt: serverTimestamp()
+    });
+    await batch.commit();
+
+    state.profile = { ...state.profile, username };
+    notify('Логин изменён. Теперь входи с @' + username + ' и прежним паролем.', 'success');
+    renderWorkspace();
+  } catch (error) {
+    notify(profilePermissionMessage(error), 'error');
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function savePassword(form) {
+  const data = new FormData(form);
+  const currentPassword = String(data.get('currentPassword') || '');
+  const newPassword = String(data.get('newPassword') || '');
+  const confirmPassword = String(data.get('confirmPassword') || '');
+
+  if (newPassword.length < 8) return notify('Новый пароль должен содержать не менее 8 символов.', 'error');
+  if (newPassword !== confirmPassword) return notify('Новые пароли не совпадают.', 'error');
+  if (newPassword === currentPassword) return notify('Новый пароль должен отличаться от текущего.', 'error');
+
+  setBusy(true);
+  try {
+    await reauthenticateCurrentUser(currentPassword);
+    await updatePassword(state.user, newPassword);
+    form.reset();
+    notify('Пароль успешно изменён.', 'success');
+  } catch (error) {
+    notify(profilePermissionMessage(error), 'error');
   } finally {
     setBusy(false);
   }
@@ -1854,6 +2070,9 @@ function bindEvents() {
     event.preventDefault();
     if (state.busy) return;
     if (form.id === 'auth-form') return submitAuth(form);
+    if (form.id === 'profile-form') return saveProfile(form);
+    if (form.id === 'username-form') return saveUsername(form);
+    if (form.id === 'password-form') return savePassword(form);
     if (form.id === 'create-group') return createGroup(form);
     if (form.id === 'join-group') return joinGroup(form);
     if (form.id === 'task-form') return submitTask(form);
