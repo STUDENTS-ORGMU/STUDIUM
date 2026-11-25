@@ -212,8 +212,8 @@ function buildAttendanceWorkbook(ExcelJS, { month, groupName, leaderName, member
 
   sheet.getCell('B3').value = 'Специальность';
   sheet.mergeCells('C3:F3');
-  sheet.getCell('C3').value = specialty || ' ';
-  sheet.getCell('N3').value = course || ' ';
+  sheet.getCell('C3').value = specialty || '—';
+  sheet.getCell('N3').value = course || '—';
   sheet.getCell('O3').value = 'курс';
   sheet.getCell('Q3').value = groupName;
   sheet.getCell('S3').value = 'группа';
@@ -296,6 +296,11 @@ function buildAttendanceWorkbook(ExcelJS, { month, groupName, leaderName, member
   sheet.getCell(footerRow + 2, 2).font = { name: 'Arial', size: 8, italic: true, color: { argb: 'FF555555' } };
   sheet.getCell(footerRow + 2, 2).alignment = { wrapText: true, vertical: 'middle' };
   sheet.getRow(footerRow + 2).height = 32;
+  sheet.mergeCells(footerRow + 3, 2, footerRow + 3, 36);
+  sheet.getCell(footerRow + 3, 2).value = 'Классификация занятий: если в названии есть «ЛЕКЦИЯ», часы относятся к лекциям; остальные занятия учитываются как практические (семинарские).';
+  sheet.getCell(footerRow + 3, 2).font = { name: 'Arial', size: 8, italic: true, color: { argb: 'FF555555' } };
+  sheet.getCell(footerRow + 3, 2).alignment = { wrapText: true, vertical: 'middle' };
+  sheet.getRow(footerRow + 3).height = 25;
 
   sheet.autoFilter = {
     from: { row: 6, column: 1 },
