@@ -2572,16 +2572,14 @@ async function doSignOut() {
   setBusy(true);
   stopLiveHomeworkUpdates();
   try {
-    await signOut(auth);
+    await signOutFromSupabase();
     state.user = null;
     state.group = null;
     state.activeMembership = null;
     renderAuth();
   } catch (error) {
     notify(error.message || 'Не удалось выйти.', 'error');
-  } finally {
-    setBusy(false);
-  }
+  } finally { setBusy(false); }
 }
 
 function start() {
