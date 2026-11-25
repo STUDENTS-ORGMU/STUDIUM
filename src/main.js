@@ -305,6 +305,7 @@ function subscribeToLiveHomework() {
   const userId = state.user.uid;
   const role = state.role;
   const token = state.liveSubscriptionToken;
+  const attendanceDate = state.attendanceDate;
   const isCurrentSubscription = () =>
     token === state.liveSubscriptionToken &&
     state.group?.id === groupId &&
@@ -318,11 +319,17 @@ function subscribeToLiveHomework() {
   const suggestionsQuery = role === 'leader'
     ? query(suggestionsRef, where('status', '==', 'pending'), orderBy('createdAt', 'desc'))
     : query(suggestionsRef, where('submittedBy', '==', userId), orderBy('createdAt', 'desc'));
+  const attendanceConstraints = [where('lessonDate', '==', attendanceDate)];
+  if (role !== 'leader') attendanceConstraints.push(where('userId', '==', userId));
+  const attendanceQuery = query(
+    collection(db, 'groups', groupId, 'attendanceResponses'),
+    ...attendanceConstraints
+  );
 
   const handleListenerError = (label, error) => {
     if (!isCurrentSubscription()) return;
     console.error('STUDIUM live update failed:', label, error);
-    notify('Не удалось получать обновления ' + label + ' в реальном времени. Проверь подключение к интернету.', 'error');
+    notify('Не удалось обновить ' + label + '. Проверь подключение к интернету.', 'error');
   };
 
   const stopTasks = onSnapshot(tasksQuery, snapshot => {
@@ -330,15 +337,23 @@ function subscribeToLiveHomework() {
     state.tasks = snapshot.docs.map(item => ({ id: item.id, ...item.data() }))
       .sort((a,b) => String(a.lessonDate || a.dueDate || '').localeCompare(String(b.lessonDate || b.dueDate || '')));
     renderWorkspace();
-  }, error => handleListenerError('домашних заданий', error));
+  }, error => handleListenerError('домашние задания', error));
 
   const stopSuggestions = onSnapshot(suggestionsQuery, snapshot => {
     if (!isCurrentSubscription()) return;
     state.suggestions = snapshot.docs.map(item => ({ id: item.id, ...item.data() }));
     renderWorkspace();
-  }, error => handleListenerError('предложений ДЗ', error));
+  }, error => handleListenerError('предложения ДЗ', error));
 
-  state.liveUnsubscribers = [stopTasks, stopSuggestions];
+  // Attendance responses must refresh on BOTH clients: students see their
+  // selected state and the leader sees each student's response without reload.
+  const stopAttendance = onSnapshot(attendanceQuery, snapshot => {
+    if (!isCurrentSubscription() || state.attendanceDate !== attendanceDate) return;
+    state.attendance = snapshot.docs.map(item => ({ id: item.id, ...item.data() }));
+    if (state.tab === 'attendance') renderWorkspace();
+  }, error => handleListenerError('ответы посещаемости', error));
+
+  state.liveUnsubscribers = [stopTasks, stopSuggestions, stopAttendance];
 }
 
 async function selectGroup(groupId) {
