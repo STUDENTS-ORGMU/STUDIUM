@@ -73,6 +73,7 @@ const state = {
   progress: new Map(),
   attendance: [],
   attendanceDate: today(),
+  scheduleEditorSlot: null,
   busy: false,
   authMode: 'login'
 };
@@ -427,7 +428,40 @@ function renderScheduleDay(weekNumber, weekday, todayInfo, tomorrowInfo) {
       while (slot < schedulePeriods.length && occupied.has(slot)) slot++;
     } else {
       const period = schedulePeriods[slot];
-      slotMarkup.push('<div class="schedule-empty-slot"><span>' + period.start + '–' + period.end + '</span><small>Свободно</small></div>');
+      const editing = state.scheduleEditorSlot &&
+        Number(state.scheduleEditorSlot.weekNumber) === weekNumber &&
+        Number(state.scheduleEditorSlot.weekday) === weekday &&
+        Number(state.scheduleEditorSlot.periodIndex) === slot;
+      if (editing && state.role === 'leader') {
+        const maxDuration = Math.min(3, schedulePeriods.length - slot);
+        const durationOptions = Array.from({ length: maxDuration }, (_, index) =>
+          '<option value="' + (index + 1) + '">' + (index === 0 ? 'Одна пара' : (index + 1) + ' пары подряд') + '</option>'
+        ).join('');
+        slotMarkup.push(
+          '<div class="schedule-cell-editor">' +
+            '<div class="schedule-cell-editor-top"><span>' + period.start + '–' + period.end + '</span><strong>Новая пара</strong></div>' +
+            '<form id="lesson-form" class="schedule-inline-form">' +
+              '<input type="hidden" name="weekNumber" value="' + weekNumber + '">' +
+              '<input type="hidden" name="weekday" value="' + weekday + '">' +
+              '<input type="hidden" name="startPeriod" value="' + slot + '">' +
+              '<label>Предмет<input name="subject" required maxlength="120" placeholder="Название предмета"></label>' +
+              '<div class="schedule-inline-options">' +
+                '<label>Длительность<select name="periodCount">' + durationOptions + '</select></label>' +
+                '<label>Аудитория<input name="room" maxlength="60" placeholder="Ауд."></label>' +
+              '</div>' +
+              '<label>ДЗ / примечание<input name="description" maxlength="220" placeholder="Что подготовить"></label>' +
+              '<div class="schedule-inline-actions"><button class="btn primary" type="submit">Сохранить</button><button class="btn ghost" type="button" data-action="cancel-lesson-cell">Отмена</button></div>' +
+            '</form>' +
+          '</div>'
+        );
+      } else {
+        slotMarkup.push(
+          '<div class="schedule-empty-slot' + (state.role === 'leader' ? ' schedule-addable' : '') + '">' +
+            '<span>' + period.start + '–' + period.end + '</span><small>Свободно</small>' +
+            (state.role === 'leader' ? '<button type="button" class="schedule-add-trigger" data-action="open-lesson-cell" data-week="' + weekNumber + '" data-day="' + weekday + '" data-period="' + slot + '">＋ Добавить пару</button>' : '') +
+          '</div>'
+        );
+      }
       slot++;
     }
   }
@@ -461,7 +495,6 @@ function renderSchedule() {
   const tomorrowInfo = { ...localDateParts(tomorrowDate), weekNumber: lessonWeekFor(localDateParts(tomorrowDate).iso) };
   const currentWeek = todayInfo.weekNumber;
   const nextWeek = currentWeek === 1 ? 2 : 1;
-  const add = state.role === 'leader' ? '<button class="btn primary" data-action="show-lesson">＋ Добавить пару</button>' : '';
   const weekNames = {1:'Первая',2:'Вторая'};
   const weekSummary = '<div class="schedule-summary">' +
     '<article><small>ТЕКУЩАЯ УЧЕБНАЯ НЕДЕЛЯ</small><strong>' + weekNames[currentWeek] + '</strong></article>' +
@@ -469,28 +502,13 @@ function renderSchedule() {
     '<article class="date-highlight today-highlight"><small>СЕГОДНЯ</small><strong>' + esc(todayInfo.label) + '</strong></article>' +
     '<article class="date-highlight tomorrow-highlight"><small>ЗАВТРА</small><strong>' + esc(tomorrowInfo.label) + '</strong></article>' +
     '</div>';
-  const editor = state.role === 'leader'
-    ? '<section class="panel schedule-editor hidden" id="lesson-editor"><div class="schedule-editor-heading"><div><p class="eyebrow">УПРАВЛЕНИЕ РАСПИСАНИЕМ</p><h2>Добавить пару</h2><p class="muted">Выбери день, учебную неделю и временной слот. Время заполнится автоматически.</p></div></div>' +
-      '<form id="lesson-form" class="form schedule-form">' +
-      '<label>Предмет<input name="subject" required maxlength="120" placeholder="Например, Анатомия"></label>' +
-      '<div class="schedule-form-grid">' +
-      '<label>Учебная неделя<select name="weekNumber"><option value="1">Первая неделя</option><option value="2">Вторая неделя</option></select></label>' +
-      '<label>День недели<select name="weekday"><option value="1">Понедельник</option><option value="2">Вторник</option><option value="3">Среда</option><option value="4">Четверг</option><option value="5">Пятница</option><option value="6">Суббота</option></select></label>' +
-      '<label>Начало<select name="startPeriod"><option value="0">1-я · 08:30–10:00</option><option value="1">2-я · 10:30–12:00</option><option value="2">3-я · 13:00–14:30</option><option value="3">4-я · 15:00–16:30</option></select></label>' +
-      '<label>Продолжительность<select name="periodCount"><option value="1">Одна пара</option><option value="2">Две пары подряд</option><option value="3">Три пары подряд</option></select></label>' +
-      '</div>' +
-      '<div class="schedule-form-grid">' +
-      '<label>Аудитория<input name="room" maxlength="60" placeholder="Например, 2С"></label>' +
-      '<label>ДЗ / примечание<input name="description" maxlength="220" placeholder="Что подготовить к занятию"></label>' +
-      '</div>' +
-      '<div class="schedule-form-actions"><button class="btn primary" type="submit">Сохранить пару</button><button type="button" class="btn ghost" data-action="hide-lesson">Отмена</button></div>' +
-      '</form></section>'
-    : '';
   const weeks = [1,2].map(week => '<section class="schedule-week"><div class="schedule-week-title"><p class="eyebrow">' + weekNames[week] + ' УЧЕБНАЯ НЕДЕЛЯ</p></div><div class="schedule-grid">' +
     [1,2,3,4,5,6].map(day => renderScheduleDay(week, day, todayInfo, tomorrowInfo)).join('') +
     '</div></section>').join('');
-  return heading('РАСПИСАНИЕ', 'Расписание группы', 'Занятия на первой и второй учебной неделе.', add) +
-    weekSummary + editor + weeks;
+  const hint = state.role === 'leader'
+    ? 'Наведись на свободную ячейку и нажми «＋ Добавить пару», чтобы заполнить её прямо в расписании.'
+    : 'Расписание занятий группы на первой и второй учебной неделе.';
+  return heading('РАСПИСАНИЕ', 'Расписание группы', hint) + weekSummary + weeks;
 }
 
 function lessonWeekFor(date) {
@@ -541,13 +559,21 @@ function bindEvents() {
     if (button.dataset.tab) { state.tab = button.dataset.tab; return renderWorkspace(); }
     if (button.dataset.action === 'logout') return doSignOut();
     if (button.dataset.action === 'menu') { document.querySelector('.sidebar')?.classList.toggle('open'); return; }
-    if (button.dataset.action === 'show-lesson') {
-      const editor = document.querySelector('#lesson-editor');
-      editor?.classList.remove('hidden');
-      editor?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (button.dataset.action === 'open-lesson-cell') {
+      state.scheduleEditorSlot = {
+        weekNumber: Number(button.dataset.week),
+        weekday: Number(button.dataset.day),
+        periodIndex: Number(button.dataset.period)
+      };
+      renderWorkspace();
+      root.querySelector('#lesson-form input[name="subject"]')?.focus();
       return;
     }
-    if (button.dataset.action === 'hide-lesson') { document.querySelector('#lesson-editor')?.classList.add('hidden'); return; }
+    if (button.dataset.action === 'cancel-lesson-cell') {
+      state.scheduleEditorSlot = null;
+      renderWorkspace();
+      return;
+    }
     if (button.dataset.action === 'delete-lesson') return deleteLesson(button.dataset.id);
     if (button.dataset.action === 'copy-code') {
       try { await navigator.clipboard.writeText(state.activeMembership.inviteCode); notify('Код скопирован.', 'success'); }
@@ -836,20 +862,35 @@ async function submitLesson(form) {
   const values = Object.fromEntries(new FormData(form).entries());
   const startIndex = Number(values.startPeriod);
   const periodCount = Number(values.periodCount);
+  const weekNumber = Number(values.weekNumber);
+  const weekday = Number(values.weekday);
   if (!Number.isInteger(startIndex) || !Number.isInteger(periodCount) ||
       startIndex < 0 || periodCount < 1 || periodCount > 3 ||
-      startIndex + periodCount > schedulePeriods.length) {
-    notify('Выбранная продолжительность не помещается в учебный день.', 'error');
+      startIndex + periodCount > schedulePeriods.length ||
+      ![1,2].includes(weekNumber) || weekday < 1 || weekday > 6) {
+    notify('Проверь выбранное время и продолжительность пары.', 'error');
+    return;
+  }
+  const endIndex = startIndex + periodCount;
+  const overlaps = state.lessons.some(item => {
+    if (Number(item.weekNumber) !== weekNumber || Number(item.weekday) !== weekday) return false;
+    const existingStart = lessonStartIndex(item);
+    if (existingStart < 0) return false;
+    const existingEnd = existingStart + lessonSpan(item, existingStart);
+    return startIndex < existingEnd && existingStart < endIndex;
+  });
+  if (overlaps) {
+    notify('Это время пересекается с уже добавленной парой.', 'error');
     return;
   }
   const startPeriod = schedulePeriods[startIndex];
-  const endPeriod = schedulePeriods[startIndex + periodCount - 1];
+  const endPeriod = schedulePeriods[endIndex - 1];
   setBusy(true);
   try {
     await addDoc(groupCollection('lessons'), {
       subject: String(values.subject || '').trim(),
-      weekday: Number(values.weekday),
-      weekNumber: Number(values.weekNumber),
+      weekday,
+      weekNumber,
       startsAt: startPeriod.start,
       endsAt: endPeriod.end,
       periodCount,
@@ -858,6 +899,7 @@ async function submitLesson(form) {
       createdBy: state.user.uid,
       createdAt: serverTimestamp()
     });
+    state.scheduleEditorSlot = null;
     notify('Пара добавлена в расписание.', 'success');
     await loadWorkspace();
     renderWorkspace();
