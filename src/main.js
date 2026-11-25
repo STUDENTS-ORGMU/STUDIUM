@@ -1442,7 +1442,7 @@ async function saveAttendance(lessonId, response, partKey = null) {
     notify(
       autoMarked
         ? (response === 'will_attend' ? 'Ответ сохранён. В журнале автоматически отмечено «Был».' : 'Ответ сохранён. В журнале автоматически отмечено «Неуваж.» — староста может изменить отметку.')
-        : 'Ответ сохранён. Автоматическая отметка не изменила журнал: возможно, староста уже исправил её вручную или новые правила Firestore ещё не опубликованы.',
+        : 'Ответ сохранён. Автоматическая отметка не изменила журнал: возможно, староста уже исправил её вручную или права доступа Supabase не позволяют изменить запись.',
       'success'
     );
     await loadWorkspace();
@@ -1506,7 +1506,7 @@ async function saveAttendanceForAll(response) {
     const label = response === 'will_attend' ? 'Буду на всех парах и частях' : 'Не буду на всех парах и частях';
     notify(
       label + '. Автоматически выставлено отметок: ' + automaticCount +
-      (protectedCount ? '. Ещё ' + protectedCount + ' отметок не изменены: возможно, староста исправил их вручную или новые правила Firestore ещё не опубликованы.' : '.'),
+      (protectedCount ? '. Ещё ' + protectedCount + ' отметок не изменены: возможно, староста исправил их вручную или права доступа Supabase не позволяют изменить запись.' : '.'),
       'success'
     );
     await loadWorkspace();
@@ -2109,7 +2109,7 @@ async function deleteLesson(lessonId) {
       groupDocument('lessons', lessonId)
     ];
 
-    // Keep each Firestore batch comfortably below the 500-write limit.
+    // Delete records in small sequential batches through the Supabase data adapter.
     for (let offset = 0; offset < refs.length; offset += 450) {
       const batch = writeBatch(db);
       refs.slice(offset, offset + 450).forEach(ref => batch.delete(ref));
@@ -2122,7 +2122,7 @@ async function deleteLesson(lessonId) {
     renderWorkspace();
   } catch (error) {
     console.error('STUDIUM delete lesson failed:', error);
-    notify(error.message || 'Не удалось удалить пару. Проверь правила Firestore.', 'error');
+    notify(error.message || 'Не удалось удалить пару. Проверь RLS-политики Supabase.', 'error');
   } finally {
     setBusy(false);
   }
