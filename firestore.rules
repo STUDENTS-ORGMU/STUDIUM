@@ -28,21 +28,25 @@ service cloud.firestore {
       allow list: if false;
       allow create: if signedIn()
         && request.auth.uid == userId
-        && request.resource.data.keys().hasOnly(['fullName', 'username', 'createdAt', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['fullName', 'patronymic', 'username', 'createdAt', 'updatedAt'])
         && request.resource.data.fullName is string
         && request.resource.data.fullName.size() >= 2
         && request.resource.data.fullName.size() <= 80
         && request.resource.data.username is string
         && request.resource.data.username.size() >= 3
-        && request.resource.data.username.size() <= 24;
+        && request.resource.data.username.size() <= 24
+        && request.resource.data.patronymic is string
+        && request.resource.data.patronymic.size() <= 80;
       allow update: if signedIn()
         && request.auth.uid == userId
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fullName', 'username', 'updatedAt'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fullName', 'patronymic', 'username', 'updatedAt'])
         && request.resource.data.fullName is string
         && request.resource.data.fullName.size() <= 80
         && request.resource.data.username is string
         && request.resource.data.username.size() >= 3
-        && request.resource.data.username.size() <= 24;
+        && request.resource.data.username.size() <= 24
+        && request.resource.data.patronymic is string
+        && request.resource.data.patronymic.size() <= 80;
       allow delete: if false;
 
       match /groups/{groupId} {
