@@ -195,3 +195,17 @@
 @media(max-width:480px){
   .task-compose-inline .task-selected-lesson-details{grid-template-columns:1fr}
 }
+
+/* Visually cross out completed homework while keeping controls clear */
+.task-card.done .task-copy>small,
+.task-card.done .task-copy h3,
+.task-card.done .task-copy p,
+.task-card.done .task-copy .meta{
+  text-decoration:line-through;
+  text-decoration-color:#aaa8a1;
+  text-decoration-thickness:1.5px;
+  color:#989790;
+}
+.task-card.done .task-copy h3{color:#77766f}
+.task-card.done .task-copy{opacity:.78}
+.task-card.done .task-card-actions{opacity:1}
