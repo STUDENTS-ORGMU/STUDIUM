@@ -78,10 +78,14 @@ create policy "leader manages members" on public.group_members for all to authen
 drop policy if exists "user joins as self" on public.group_members;
 create policy "user joins as self" on public.group_members for insert to authenticated with check(user_id=auth.uid() and role='student');
 
--- Exact-code lookup only; this policy does not expose a list endpoint safely by design
--- unless the client always filters by the known code. Add a server-side join RPC before cutover.
+-- Do not grant table SELECT on invite_codes: expose only exact-code lookup via RPC.
 drop policy if exists "authenticated exact invite lookup" on public.invite_codes;
-create policy "authenticated exact invite lookup" on public.invite_codes for select to authenticated using(true);
+create or replace function public.lookup_invite_code(p_code text)
+returns text language sql stable security definer set search_path=public as $
+ select group_id from public.invite_codes where code=p_code limit 1;
+$;
+revoke all on function public.lookup_invite_code(text) from public;
+grant execute on function public.lookup_invite_code(text) to authenticated;
 drop policy if exists "leader manages invite codes" on public.invite_codes;
 create policy "leader manages invite codes" on public.invite_codes for all to authenticated using(public.is_group_leader(group_id)) with check(public.is_group_leader(group_id));
 
