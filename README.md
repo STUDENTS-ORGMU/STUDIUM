@@ -22,6 +22,7 @@ STUDIUM — отдельная платформа для учебных груп
 - Cloud Firestore
 - Firestore Security Rules
 - Firebase modular Web SDK
+- Firestore-based chunked file storage (Spark-compatible)
 - PWA shell cache через Service Worker
 
 ## Локальный запуск
