@@ -1,0 +1,23 @@
+# Supabase backend
+
+STUDIUM uses Supabase as its only backend. Firebase/Firestore is no longer part of the application. No Firebase data is migrated.
+
+## One-time project setup
+
+1. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in local `.env` and GitHub Actions Variables.
+2. Disable email confirmation in Supabase Auth because users register and sign in with a generated `<username>@studium.invalid` alias.
+3. Apply the SQL migrations in `supabase/migrations` in numerical order.
+5. Confirm the private `group-materials` bucket exists and its RLS policies are installed.
+
+## Database layout
+
+- `profiles`: account profile and unique username.
+- `study_groups`: group metadata.
+- `group_members`: group membership and roles.
+- `invite_codes`: invitation codes, exposed to clients only through the exact-code lookup/join RPC.
+- `group_records`: JSONB records for tasks, schedule, progress, attendance and materials.
+- Storage bucket `group-materials`: private group files, addressed by `<group-id>/<material-id>/<filename>`.
+
+## Security
+
+All tables use Row Level Security. Members can read records for their groups. Leaders manage shared records. Students can create and update only their own task suggestions, task progress and attendance responses. Group joins are performed by the `join_group_with_invite` RPC. Never expose the Supabase service-role key in client code.
