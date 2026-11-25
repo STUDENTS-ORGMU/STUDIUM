@@ -1319,6 +1319,7 @@ async function updateProgress(input) {
   const progressId = taskId + '_' + state.user.uid;
   const progressRef = groupDocument('taskProgress', progressId);
   const current = state.progress.get(taskId);
+  const card = input.closest('.task-card');
   setBusy(true);
   try {
     await setDoc(progressRef, {
@@ -1328,9 +1329,11 @@ async function updateProgress(input) {
       updatedAt: serverTimestamp()
     }, { merge: true });
     state.progress.set(taskId, input.checked);
+    card?.classList.toggle('done', input.checked);
     notify('Личный прогресс сохранён.', 'success');
   } catch (error) {
     input.checked = Boolean(current);
+    card?.classList.toggle('done', Boolean(current));
     notify(error.message || 'Не удалось сохранить отметку.', 'error');
   } finally {
     setBusy(false);
