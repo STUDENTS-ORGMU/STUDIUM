@@ -344,8 +344,9 @@ service cloud.firestore {
         allow get, list: if isMember(groupId);
         allow create: if isLeader(groupId)
           && request.resource.data.keys().hasOnly([
-            'title', 'description', 'kind', 'externalUrl', 'storagePath',
-            'fileName', 'contentType', 'size', 'createdBy', 'createdAt', 'updatedAt'
+            'title', 'description', 'kind', 'externalUrl', 'fileStorage',
+            'fileId', 'chunkCount', 'fileName', 'contentType', 'size',
+            'createdBy', 'createdAt', 'updatedAt'
           ])
           && request.resource.data.createdBy == request.auth.uid
           && request.resource.data.title is string
@@ -359,11 +360,14 @@ service cloud.firestore {
               && request.resource.data.externalUrl is string
               && request.resource.data.externalUrl.size() <= 2048
               && request.resource.data.externalUrl.matches('^https?://.*')
-              && !request.resource.data.keys().hasAny(['storagePath']))
+              && !request.resource.data.keys().hasAny(['fileId', 'fileStorage', 'chunkCount']))
             ||
             (request.resource.data.kind == 'file'
-              && request.resource.data.storagePath is string
-              && request.resource.data.storagePath.matches('^groups/.*/materials/.*/.*')
+              && request.resource.data.fileStorage == 'firestore-chunks'
+              && request.resource.data.fileId == materialId
+              && request.resource.data.chunkCount is int
+              && request.resource.data.chunkCount > 0
+              && request.resource.data.chunkCount <= 60
               && request.resource.data.fileName is string
               && request.resource.data.contentType is string
               && request.resource.data.size is int
@@ -371,6 +375,19 @@ service cloud.firestore {
               && request.resource.data.size <= 20971520
               && !request.resource.data.keys().hasAny(['externalUrl']))
           );
+        allow update: if false;
+        allow delete: if isLeader(groupId);
+      }
+
+      match /materialFiles/{materialId}/chunks/{chunkId} {
+        allow get, list: if isMember(groupId);
+        allow create: if isLeader(groupId)
+          && request.resource.data.keys().hasOnly(['index', 'data', 'createdBy', 'createdAt'])
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.index is int
+          && request.resource.data.index >= 0
+          && request.resource.data.data is string
+          && request.resource.data.data.size() <= 500000;
         allow update: if false;
         allow delete: if isLeader(groupId);
       }
