@@ -46,3 +46,71 @@
 .student-attendance-response p{font-size:12px}
 @media(max-width:950px){.attendance-roster-row{grid-template-columns:minmax(150px,1fr) minmax(100px,.7fr);gap:9px}.roster-official{grid-column:1/-1;padding-left:35px}}
 @media(max-width:680px){.attendance-lesson-grid{grid-template-columns:1fr}.attendance-register{padding:14px}.attendance-register-head{align-items:flex-start;flex-direction:column}.attendance-register-head>.btn{width:100%;white-space:normal}.attendance-roster-row{grid-template-columns:1fr 1fr;gap:8px}.roster-person{grid-column:1/-1}.roster-official{grid-column:1/-1;padding-left:0;align-items:center}.roster-excuse-btn{white-space:normal}.attendance-summary{gap:6px}.attendance-summary span{font-size:9px;padding:6px 8px}}
+
+
+/* Student attendance view — quick whole-day reply and per-lesson choices */
+.student-attendance-page{margin-top:0;background:#07110c;color:#f3f7f3;border:1px solid #183b29;border-radius:18px;padding:20px;box-shadow:0 12px 32px #07110c12}
+.student-attendance-header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:8px}
+.student-attendance-header h1{font:800 clamp(21px,3vw,30px) Manrope,sans-serif;margin:0 0 7px;color:#f3f7f3}
+.student-attendance-header p{margin:0;color:#9bb3a4;font-size:15px}
+.student-attendance-date{display:flex;flex-direction:column;gap:5px;min-width:150px}
+.student-attendance-date label{font-size:10px;color:#9bb3a4;font-weight:700}
+.student-attendance-date input{background:#102016;border:1px solid #2b4938;border-radius:9px;padding:9px 10px;color:#f3f7f3;font:inherit}
+.student-attendance-caption{font-size:12px;color:#9bb3a4;margin:14px 0 18px}
+.attendance-all-actions{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0 20px}
+.attendance-all-button{min-height:64px;padding:12px;border-radius:14px;border:1px solid #294433;background:#101a13;color:#f5f7f4;font:700 17px Manrope,sans-serif;transition:.15s}
+.attendance-all-button:hover{background:#16281c;border-color:#3a684a}
+.attendance-all-button.active{border-color:#55b77b;background:#123320;box-shadow:0 0 0 2px #55b77b25}
+.student-attendance-lessons{display:flex;flex-direction:column;gap:10px}
+.student-attendance-lesson{border:1px solid #294433;border-radius:15px;background:#0e1912;padding:16px 17px}
+.student-attendance-lesson-title{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:13px}
+.student-attendance-lesson-title>div{min-width:0}
+.student-attendance-lesson-title small{display:block;color:#a5b9a9;font-size:12px;font-weight:700;margin-bottom:7px}
+.student-attendance-lesson-title h2{font:700 18px Manrope,sans-serif;color:#f4f7f3;margin:0 0 5px}
+.student-attendance-lesson-title p{font-size:12px;color:#9bb3a4;margin:0}
+.student-attendance-lesson-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.attendance-choice{min-height:58px;border:1px solid #294433;border-radius:13px;background:#101b14;color:#f3f7f3;font:700 16px Manrope,sans-serif;transition:.15s}
+.attendance-choice:hover{border-color:#4a805b;background:#16261b}
+.attendance-choice.active.attend{background:#124a2c;border-color:#3bb66c;color:#baf4cd}
+.attendance-choice.active.miss{background:#49201e;border-color:#c85d55;color:#ffd1cd}
+.student-attendance-page .attendance-response{font-size:10px}
+.student-attendance-page .attendance-response.will-attend{background:#153a24;color:#a9ecc0}
+.student-attendance-page .attendance-response.will-miss{background:#48211f;color:#ffc6c0}
+.student-attendance-page .attendance-response.no-response{background:#263229;color:#b0bdb3}
+.student-attendance-page .empty{background:#0e1912;border-color:#31523b;color:#f3f7f3}
+.student-attendance-page .empty h3{color:#f3f7f3}
+.student-attendance-page .empty p{color:#9bb3a4}
+
+/* Leader's official register — one student per row, three large marks */
+.attendance-date-leader{margin:0 0 17px}
+.attendance-lesson-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.attendance-register{margin-top:18px;padding:18px;background:#101b22;border:1px solid #2a4656;border-radius:16px;color:#f1f6fa}
+.attendance-register-head{align-items:center;margin-bottom:12px}
+.attendance-register-head h2{color:#f1f6fa}
+.attendance-register-head .muted{color:#a6bdc9}
+.attendance-register-count{border:1px solid #476b7d;border-radius:999px;padding:7px 11px;color:#d5eaf3;font-size:11px;font-weight:700;white-space:nowrap}
+.attendance-register-summary{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:13px}
+.attendance-register-summary span{background:#1c303c;border:1px solid #355466;border-radius:8px;padding:7px 10px;color:#c5dbe5;font-size:10px}
+.attendance-register-summary b{color:#fff}
+.attendance-bulk-row{margin-bottom:12px}
+.attendance-bulk-excuse{border:1px solid #406a53;background:#163526;color:#bdf1ce;border-radius:9px;padding:9px 12px;font-size:11px;font-weight:700}
+.attendance-bulk-excuse:hover{background:#1c4631}
+.attendance-roster{display:flex;flex-direction:column;gap:9px;border:0}
+.attendance-person-row{display:grid;grid-template-columns:minmax(210px,1fr) auto;align-items:center;gap:18px;padding:13px 15px;border:1px solid #3b657b;border-radius:13px;background:#203e50}
+.attendance-person-info{min-width:0;display:flex;align-items:center;flex-wrap:wrap;column-gap:8px;row-gap:5px}
+.attendance-person-info>strong{font-size:16px;color:#f6fbff;font-weight:500;overflow-wrap:anywhere}
+.attendance-person-info .roster-role{background:#315064;color:#e3f4fa}
+.attendance-person-response{flex-basis:100%;font-size:10px;color:#bfd4df}
+.attendance-person-response.positive{color:#a8ebc2}
+.attendance-person-response.negative{color:#ffc4bf}
+.roster-late-note{font-size:10px;color:#ffe0a0}
+.attendance-mark-buttons{display:grid;grid-template-columns:repeat(3,minmax(88px,1fr));gap:8px}
+.attendance-mark{min-height:55px;padding:9px 13px;border:1px solid #648399;border-radius:12px;background:#263f50;color:#f1f7fb;font-size:14px;font-weight:600;transition:.15s}
+.attendance-mark:hover{filter:brightness(1.12)}
+.attendance-mark.mark-present.active{background:#087eae;border-color:#53c8f5;color:#fff;box-shadow:0 0 0 2px #42b9e522}
+.attendance-mark.mark-absent.active{background:#a92e31;border-color:#ff777b;color:#fff;box-shadow:0 0 0 2px #ff777b22}
+.attendance-mark.mark-excused.active{background:#197248;border-color:#61d29b;color:#fff;box-shadow:0 0 0 2px #61d29b22}
+.attendance-register-footnote{color:#9fb9c6;margin:13px 0 0}
+.attendance-pick-hint{margin-top:12px}
+@media(max-width:900px){.attendance-person-row{grid-template-columns:1fr;gap:10px}.attendance-mark-buttons{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:680px){.student-attendance-page{padding:14px;border-radius:14px}.student-attendance-header{flex-direction:column}.student-attendance-date{width:100%}.attendance-all-actions{grid-template-columns:1fr;gap:8px}.attendance-all-button{min-height:54px;font-size:15px}.student-attendance-lesson{padding:13px}.student-attendance-lesson-title h2{font-size:16px}.student-attendance-lesson-actions{gap:8px}.attendance-choice{min-height:52px;font-size:14px}.attendance-lesson-grid{grid-template-columns:1fr}.attendance-register{padding:12px}.attendance-register-head{align-items:flex-start}.attendance-person-row{padding:12px}.attendance-mark-buttons{gap:6px}.attendance-mark{min-width:0;padding:8px 5px;min-height:49px;font-size:12px}.attendance-register-count{font-size:10px}}
