@@ -554,3 +554,6 @@
   .attendance-part-selector{display:grid;grid-template-columns:1fr 1fr}
   .attendance-part-tab{min-width:0;padding:9px}
 }
+
+/* Leader attendance lesson picker: keep every lesson in a single vertical sequence */
+.attendance-date-leader + .attendance-lesson-grid{grid-template-columns:minmax(0,1fr)}
