@@ -97,7 +97,7 @@ service cloud.firestore {
 
       match /members/{memberId} {
         allow get: if signedIn() && (memberId == request.auth.uid || isLeader(groupId));
-        allow list: if isLeader(groupId);
+        allow list: if isMember(groupId);
         allow create: if signedIn()
           && memberId == request.auth.uid
           && request.resource.data.userId == request.auth.uid
