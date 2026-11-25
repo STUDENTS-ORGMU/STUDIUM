@@ -128,6 +128,7 @@ const state = {
   attendanceRecords: [],
   groupMembers: [],
   selectedAttendanceLessonId: null,
+  selectedAttendancePartKey: null,
   attendanceDate: today(),
   scheduleEditorSlot: null,
   selectedScheduleLessonId: null,
@@ -1030,6 +1031,46 @@ function nextLessonDate(lesson) {
   return toISO(candidate);
 }
 
+function attendanceParts(lesson) {
+  const startIndex = lessonStartIndex(lesson);
+  const span = startIndex >= 0 ? lessonSpan(lesson, startIndex) : 1;
+  if (span <= 1 || startIndex < 0) {
+    return [{ partKey: null, label: '', startsAt: lesson.startsAt || '', endsAt: lesson.endsAt || '' }];
+  }
+  return schedulePeriods.slice(startIndex, startIndex + span).map((period, index) => ({
+    partKey: 'part' + (index + 1),
+    label: (index + 1) + '-я часть',
+    startsAt: period.start,
+    endsAt: period.end
+  }));
+}
+
+function attendancePartMatches(item, partKey) {
+  if (!partKey) return !item.partKey;
+  // Old one-entry attendance is used as a baseline for both parts until a
+  // student or leader records a part-specific value.
+  return item.partKey === partKey || !item.partKey;
+}
+
+function attendanceItemForPart(items, lessonId, personId, partKey, personField) {
+  const candidates = items.filter(item =>
+    item.lessonId === lessonId &&
+    item.lessonDate === state.attendanceDate &&
+    item[personField] === personId
+  );
+  if (partKey) {
+    return candidates.find(item => item.partKey === partKey) ||
+      candidates.find(item => !item.partKey) || null;
+  }
+  return candidates.find(item => !item.partKey) || null;
+}
+
+function attendanceDocumentId(lessonId, personId, partKey) {
+  return partKey
+    ? lessonId + '_' + state.attendanceDate + '_' + partKey + '_' + personId
+    : lessonId + '_' + state.attendanceDate + '_' + personId;
+}
+
 function attendanceResponseLabel(response) {
   if (response === 'will_attend') return '<span class="attendance-response will-attend">Будет на паре</span>';
   if (response === 'will_miss') return '<span class="attendance-response will-miss">Не будет</span>';
@@ -1040,17 +1081,20 @@ function attendanceStatusLabel(status) {
   return ({ present: 'Был', absent: 'Неуваж.', excused: 'Уваж.', late: 'Опоздал' })[status] || 'Не отмечен';
 }
 
-function renderAttendanceRoster(lesson) {
+function renderAttendanceRoster(lesson, partKey = null) {
+  const parts = attendanceParts(lesson);
+  const part = parts.find(item => item.partKey === partKey) || parts[0];
+  partKey = part?.partKey ?? null;
   const members = state.groupMembers.slice().sort((a,b) =>
     String(a.displayName || a.fullName || a.username || '').localeCompare(
       String(b.displayName || b.fullName || b.username || ''), 'ru', { sensitivity: 'base' }
     )
   );
   const responses = new Map(state.attendance
-    .filter(item => item.lessonId === lesson.id && item.lessonDate === state.attendanceDate)
+    .filter(item => item.lessonId === lesson.id && item.lessonDate === state.attendanceDate && attendancePartMatches(item, partKey))
     .map(item => [item.userId, item]));
   const records = new Map(state.attendanceRecords
-    .filter(item => item.lessonId === lesson.id && item.lessonDate === state.attendanceDate)
+    .filter(item => item.lessonId === lesson.id && item.lessonDate === state.attendanceDate && attendancePartMatches(item, partKey))
     .map(item => [item.studentId, item]));
   const missed = members.filter(member => responses.get(member.id)?.response === 'will_miss');
   const counts = {
@@ -1058,10 +1102,11 @@ function renderAttendanceRoster(lesson) {
     absent: members.filter(member => records.get(member.id)?.status === 'absent').length,
     excused: members.filter(member => records.get(member.id)?.status === 'excused').length
   };
+  const partAttribute = partKey ? ' data-part-key="' + esc(partKey) + '"' : '';
   const bulkButton = members.length
-    ? '<button class="attendance-bulk-present" type="button" data-action="mark-all-present" data-lesson="' + esc(lesson.id) + '">Всем поставить «Был» (' + members.length + ')</button>' +
+    ? '<button class="attendance-bulk-present" type="button" data-action="mark-all-present" data-lesson="' + esc(lesson.id) + '"' + partAttribute + '>Всем поставить «Был» (' + members.length + ')</button>' +
       (missed.length
-        ? '<button class="attendance-bulk-excuse" type="button" data-action="excuse-all-missed" data-lesson="' + esc(lesson.id) + '">Поставить «Уваж.» всем, кто ответил «Не буду» (' + missed.length + ')</button>'
+        ? '<button class="attendance-bulk-excuse" type="button" data-action="excuse-all-missed" data-lesson="' + esc(lesson.id) + '"' + partAttribute + '>Поставить «Уваж.» всем, кто ответил «Не буду» (' + missed.length + ')</button>'
         : '')
     : '';
 
@@ -1071,16 +1116,17 @@ function renderAttendanceRoster(lesson) {
     const response = responses.get(userId)?.response || '';
     const status = records.get(userId)?.status || '';
     const role = member.role === 'leader' ? '<span class="roster-role">Староста</span>' : '';
-    const responseText = response === 'will_attend' ? 'Ответ: будет на паре'
-      : (response === 'will_miss' ? 'Ответ: не будет на паре' : 'Ответ: пока не дан');
+    const responseText = response === 'will_attend' ? 'Ответ: будет на этой части'
+      : (response === 'will_miss' ? 'Ответ: не будет на этой части' : 'Ответ: пока не дан');
     const responseClass = response === 'will_attend' ? ' positive'
       : (response === 'will_miss' ? ' negative' : '');
     const lateNote = status === 'late' ? '<span class="roster-late-note">Последняя отметка: опоздал</span>' : '';
     const mark = (value, label, cls) =>
       '<button type="button" class="attendance-mark ' + cls + (status === value ? ' active' : '') +
       '" data-official-status="' + value + '" data-student="' + esc(userId) +
-      '" data-lesson="' + esc(lesson.id) + '" aria-pressed="' + (status === value) + '">' + label + '</button>';
-    return '<article data-key="attendance-person-' + esc(userId) + '" class="attendance-person-row"><div class="attendance-person-info"><strong>' + esc(name) + '</strong>' + role +
+      '" data-lesson="' + esc(lesson.id) + '"' + partAttribute +
+      ' aria-pressed="' + (status === value) + '">' + label + '</button>';
+    return '<article data-key="attendance-person-' + esc(userId) + '-' + esc(partKey || 'whole') + '" class="attendance-person-row"><div class="attendance-person-info"><strong>' + esc(name) + '</strong>' + role +
       '<small class="attendance-person-response' + responseClass + '">' + responseText + '</small>' + lateNote + '</div>' +
       '<div class="attendance-mark-buttons">' +
       mark('present', 'Был', 'mark-present') +
@@ -1089,12 +1135,24 @@ function renderAttendanceRoster(lesson) {
       '</div></article>';
   }).join('');
 
-  return '<section class="attendance-register"><div class="attendance-register-head"><div><p class="eyebrow">ОФИЦИАЛЬНЫЙ ЖУРНАЛ</p><h2>' + esc(lesson.subject) + '</h2><p class="muted">' + esc(lesson.startsAt || '') + (lesson.endsAt ? '–' + esc(lesson.endsAt) : '') + ' · ' + esc(dateText(state.attendanceDate)) + '</p></div>' +
+  const partSelector = parts.length > 1
+    ? '<div class="attendance-part-selector">' + parts.map(item =>
+        '<button type="button" class="attendance-part-tab' + (item.partKey === partKey ? ' active' : '') +
+        '" data-attendance-part="' + esc(item.partKey) + '" data-lesson="' + esc(lesson.id) + '">' +
+        '<strong>' + esc(item.label) + '</strong><small>' + esc(item.startsAt + '–' + item.endsAt) + '</small></button>'
+      ).join('') + '</div>'
+    : '';
+  const partHeading = parts.length > 1
+    ? '<p class="muted">' + esc(part.label + ' · ' + part.startsAt + '–' + part.endsAt) + ' · ' + esc(dateText(state.attendanceDate)) + '</p>'
+    : '<p class="muted">' + esc(lesson.startsAt || '') + (lesson.endsAt ? '–' + esc(lesson.endsAt) : '') + ' · ' + esc(dateText(state.attendanceDate)) + '</p>';
+
+  return '<section class="attendance-register"><div class="attendance-register-head"><div><p class="eyebrow">ОФИЦИАЛЬНЫЙ ЖУРНАЛ</p><h2>' + esc(lesson.subject) + '</h2>' + partHeading + '</div>' +
     '<div class="attendance-register-count">' + members.length + ' чел.</div></div>' +
+    partSelector +
     '<div class="attendance-register-summary"><span>Был: <b>' + counts.present + '</b></span><span>Неуваж.: <b>' + counts.absent + '</b></span><span>Уваж.: <b>' + counts.excused + '</b></span></div>' +
     (bulkButton ? '<div class="attendance-bulk-row">' + bulkButton + '</div>' : '') +
     (rows ? '<div class="attendance-roster">' + rows + '</div>' : empty('В группе пока нет участников', 'Когда студенты вступят в группу, они появятся здесь.')) +
-    '<p class="muted small attendance-register-footnote">Ответ «Будет / Не будет» оставляет студент. Кнопки справа — официальная отметка старосты. Повторное нажатие снимает отметку.</p></section>';
+    '<p class="muted small attendance-register-footnote">Предварительный ответ оставляет студент отдельно по каждой части. Кнопки справа — официальная отметка старосты для выбранной части пары.</p></section>';
 }
 
 function renderStudentAttendance(lessons, date) {
@@ -1103,30 +1161,46 @@ function renderStudentAttendance(lessons, date) {
   const dateObj = new Date(year, month - 1, day, 12);
   const dateLabel = dateObj.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
   const weekdayLabel = dateObj.toLocaleDateString('ru-RU', { weekday: 'long' });
-  const responseMap = new Map(state.attendance.map(item => [item.lessonId, item.response]));
-  const attendedCount = lessons.filter(item => responseMap.get(item.id) === 'will_attend').length;
-  const missedCount = lessons.filter(item => responseMap.get(item.id) === 'will_miss').length;
-  const allAttend = lessons.length > 0 && attendedCount === lessons.length;
-  const allMiss = lessons.length > 0 && missedCount === lessons.length;
-  const quick = lessons.length
+  const entries = lessons.flatMap(lesson =>
+    attendanceParts(lesson).map(part => ({ lesson, part }))
+  );
+  const responseFor = (lesson, partKey) =>
+    attendanceItemForPart(state.attendance, lesson.id, state.user.uid, partKey, 'userId')?.response || '';
+  const attendedCount = entries.filter(item => responseFor(item.lesson, item.part.partKey) === 'will_attend').length;
+  const missedCount = entries.filter(item => responseFor(item.lesson, item.part.partKey) === 'will_miss').length;
+  const allAttend = entries.length > 0 && attendedCount === entries.length;
+  const allMiss = entries.length > 0 && missedCount === entries.length;
+  const quick = entries.length
     ? '<div class="attendance-all-actions">' +
       '<button type="button" class="attendance-all-button' + (allAttend ? ' active' : '') + '" data-attendance-all="will_attend">Буду на всех парах</button>' +
       '<button type="button" class="attendance-all-button' + (allMiss ? ' active' : '') + '" data-attendance-all="will_miss">Не буду на всех парах</button>' +
       '</div>' : '';
   const cards = lessons.map((lesson,index) => {
-    const response = responseMap.get(lesson.id) || '';
-    return '<article data-key="student-attendance-' + esc(lesson.id) + '" class="student-attendance-lesson"><div class="student-attendance-lesson-title"><div>' +
+    const parts = attendanceParts(lesson);
+    const double = parts.length > 1;
+    const partCards = parts.map(part => {
+      const response = responseFor(lesson, part.partKey);
+      const partTitle = double
+        ? '<div class="attendance-subpart-heading"><strong>' + esc(part.label) + '</strong><span>' + esc(part.startsAt + '–' + part.endsAt) + '</span></div>'
+        : '';
+      const partAttribute = part.partKey ? ' data-part-key="' + esc(part.partKey) + '"' : '';
+      return '<div class="attendance-subpart' + (double ? ' is-split' : '') + '">' + partTitle +
+        '<div class="student-attendance-lesson-actions">' +
+        '<button type="button" class="attendance-choice' + (response === 'will_attend' ? ' active attend' : '') + '" data-attendance="will_attend" data-lesson="' + esc(lesson.id) + '"' + partAttribute + '>Буду</button>' +
+        '<button type="button" class="attendance-choice' + (response === 'will_miss' ? ' active miss' : '') + '" data-attendance="will_miss" data-lesson="' + esc(lesson.id) + '"' + partAttribute + '>Не буду</button>' +
+        '</div>' +
+        (double && response ? '<div class="attendance-subpart-response">' + attendanceResponseLabel(response) + '</div>' : '') +
+        '</div>';
+    }).join('');
+    return '<article data-key="student-attendance-' + esc(lesson.id) + '" class="student-attendance-lesson' + (double ? ' has-split-parts' : '') + '"><div class="student-attendance-lesson-title"><div>' +
       '<small>' + (index + 1) + ' пара · ' + esc(lesson.startsAt || '') + (lesson.endsAt ? '–' + esc(lesson.endsAt) : '') + '</small>' +
       '<h2>' + esc(lesson.subject) + '</h2>' + (lesson.room ? '<p>' + esc(lesson.room) + '</p>' : '') +
-      '</div>' + (response ? attendanceResponseLabel(response) : '') + '</div>' +
-      '<div class="student-attendance-lesson-actions">' +
-      '<button type="button" class="attendance-choice' + (response === 'will_attend' ? ' active attend' : '') + '" data-attendance="will_attend" data-lesson="' + esc(lesson.id) + '">Буду</button>' +
-      '<button type="button" class="attendance-choice' + (response === 'will_miss' ? ' active miss' : '') + '" data-attendance="will_miss" data-lesson="' + esc(lesson.id) + '">Не буду</button>' +
-      '</div></article>';
+      '</div>' + (!double && parts.length ? attendanceResponseLabel(responseFor(lesson, null)) : '') + '</div>' +
+      '<div class="attendance-subparts">' + partCards + '</div></article>';
   }).join('');
   return '<section class="student-attendance-page"><header class="student-attendance-header"><div><h1>' + esc(profileName) + '</h1><p>' + esc(dateLabel) + ', ' + esc(weekdayLabel) + '</p></div>' +
     '<div class="student-attendance-date"><label for="attendance-date">Дата</label><input type="date" id="attendance-date" value="' + date + '"></div></header>' +
-    '<p class="student-attendance-caption">Отметь, будешь ли ты на занятиях. Староста увидит твой ответ.</p>' + quick +
+    '<p class="student-attendance-caption">Отметь, будешь ли ты на занятиях. У двойной пары можно ответить отдельно по каждой части. Староста увидит твои ответы.</p>' + quick +
     (lessons.length ? '<div class="student-attendance-lessons">' + cards + '</div>' : empty('На эту дату пар нет', 'Выбери другую дату или проверь расписание группы.')) +
     '</section>';
 }
@@ -1145,24 +1219,38 @@ function renderAttendance() {
 
   const selected = lessons.find(item => item.id === state.selectedAttendanceLessonId) || null;
   const cards = lessons.map((lesson,index) => {
-    const responses = state.attendance.filter(item => item.lessonId === lesson.id && item.lessonDate === date);
-    const attending = responses.filter(item => item.response === 'will_attend').length;
-    const missing = responses.filter(item => item.response === 'will_miss').length;
+    const parts = attendanceParts(lesson);
+    const partSummaries = parts.map(part => {
+      const responses = state.attendance.filter(item =>
+        item.lessonId === lesson.id && item.lessonDate === date && attendancePartMatches(item, part.partKey)
+      );
+      const attending = responses.filter(item => item.response === 'will_attend').length;
+      const missing = responses.filter(item => item.response === 'will_miss').length;
+      return parts.length > 1
+        ? '<small>' + esc(part.label) + ': будут ' + attending + ' · не будут ' + missing + '</small>'
+        : '<small>Будут: ' + attending + ' · Не будут: ' + missing + '</small>';
+    }).join('');
     return '<button type="button" class="attendance-lesson-card' + (selected?.id === lesson.id ? ' selected' : '') +
       '" data-attendance-lesson="' + esc(lesson.id) + '"><span>' + (index + 1) + ' пара · ' +
       esc(lesson.startsAt || '') + (lesson.endsAt ? '–' + esc(lesson.endsAt) : '') +
-      '</span><strong>' + esc(lesson.subject) + '</strong><small>Будут: ' + attending + ' · Не будут: ' + missing + '</small></button>';
+      '</span><strong>' + esc(lesson.subject) + '</strong>' + partSummaries + '</button>';
   }).join('');
   const [year,month,day] = date.split('-').map(Number);
   const dateLabel = new Date(year,month-1,day,12).toLocaleDateString('ru-RU',{day:'numeric',month:'long',weekday:'long'});
+  const selectedParts = selected ? attendanceParts(selected) : [];
+  const selectedPartKey = selectedParts.length > 1
+    ? (selectedParts.some(part => part.partKey === state.selectedAttendancePartKey)
+        ? state.selectedAttendancePartKey
+        : selectedParts[0].partKey)
+    : null;
   return heading('ПОСЕЩАЕМОСТЬ', 'Журнал старосты', 'Выбери пару и отмечай посещаемость по списку группы.') +
     '<div class="date-picker attendance-date-leader"><label>Дата<input type="date" id="attendance-date" value="' + date + '"></label><span>' + esc(dateLabel) + ' · ' + (week === 1 ? 'Первая' : 'Вторая') + ' учебная неделя</span></div>' +
     (lessons.length ? '<div class="attendance-lesson-grid">' + cards + '</div>' : empty('На эту дату пар нет', 'Выбери другую дату или проверь расписание группы.')) +
-    (selected ? renderAttendanceRoster(selected) : (lessons.length ? '<p class="muted small attendance-pick-hint">Нажми на пару выше — откроется список группы по алфавиту.</p>' : ''));
+    (selected ? renderAttendanceRoster(selected, selectedPartKey) : (lessons.length ? '<p class="muted small attendance-pick-hint">Нажми на пару выше — откроется список группы по алфавиту.</p>' : ''));
 }
 
-async function saveAttendance(lessonId, response) {
-  const responseId = lessonId + '_' + state.attendanceDate + '_' + state.user.uid;
+async function saveAttendance(lessonId, response, partKey = null) {
+  const responseId = attendanceDocumentId(lessonId, state.user.uid, partKey);
   const responseRef = doc(db, 'groups', state.group.id, 'attendanceResponses', responseId);
   setBusy(true);
   try {
@@ -1170,19 +1258,19 @@ async function saveAttendance(lessonId, response) {
       lessonId,
       userId: state.user.uid,
       lessonDate: state.attendanceDate,
+      ...(partKey ? { partKey } : {}),
       response,
       updatedAt: serverTimestamp()
     }, { merge: true });
 
-    // The student's answer initializes the official mark. A leader's manual
-    // correction is protected by the Firestore rule and will never be replaced.
     let autoMarked = true;
     try {
       const status = response === 'will_attend' ? 'present' : 'absent';
-      await setDoc(attendanceRecordRef(lessonId, state.user.uid), {
+      await setDoc(attendanceRecordRef(lessonId, state.user.uid, partKey), {
         studentId: state.user.uid,
         lessonId,
         lessonDate: state.attendanceDate,
+        ...(partKey ? { partKey } : {}),
         status,
         reason: 'Автоматическая отметка по ответу студента',
         source: 'student_response',
@@ -1216,16 +1304,20 @@ async function saveAttendanceForAll(response) {
   const weekday = ((new Date(Date.UTC(y,m-1,d)).getUTCDay()+6)%7)+1;
   const week = lessonWeekFor(state.attendanceDate);
   const lessons = state.lessons.filter(item => Number(item.weekday) === weekday && Number(item.weekNumber) === week);
-  if (!lessons.length) return notify('На эту дату пар нет.');
+  const entries = lessons.flatMap(lesson =>
+    attendanceParts(lesson).map(part => ({ lesson, part }))
+  );
+  if (!entries.length) return notify('На эту дату пар нет.');
   setBusy(true);
   try {
     const batch = writeBatch(db);
-    lessons.forEach(lesson => {
-      const responseId = lesson.id + '_' + state.attendanceDate + '_' + state.user.uid;
+    entries.forEach(({lesson,part}) => {
+      const responseId = attendanceDocumentId(lesson.id, state.user.uid, part.partKey);
       batch.set(doc(db, 'groups', state.group.id, 'attendanceResponses', responseId), {
         lessonId: lesson.id,
         userId: state.user.uid,
         lessonDate: state.attendanceDate,
+        ...(part.partKey ? { partKey: part.partKey } : {}),
         response,
         updatedAt: serverTimestamp()
       }, { merge: true });
@@ -1234,12 +1326,13 @@ async function saveAttendanceForAll(response) {
 
     let automaticCount = 0;
     let protectedCount = 0;
-    await Promise.all(lessons.map(async lesson => {
+    await Promise.all(entries.map(async ({lesson,part}) => {
       try {
-        await setDoc(attendanceRecordRef(lesson.id, state.user.uid), {
+        await setDoc(attendanceRecordRef(lesson.id, state.user.uid, part.partKey), {
           studentId: state.user.uid,
           lessonId: lesson.id,
           lessonDate: state.attendanceDate,
+          ...(part.partKey ? { partKey: part.partKey } : {}),
           status: response === 'will_attend' ? 'present' : 'absent',
           reason: 'Автоматическая отметка по ответу студента',
           source: 'student_response',
@@ -1254,7 +1347,7 @@ async function saveAttendanceForAll(response) {
       }
     }));
 
-    const label = response === 'will_attend' ? 'Буду на всех парах' : 'Не буду на всех парах';
+    const label = response === 'will_attend' ? 'Буду на всех парах и частях' : 'Не буду на всех парах и частях';
     notify(
       label + '. Автоматически выставлено отметок: ' + automaticCount +
       (protectedCount ? '. Ещё ' + protectedCount + ' отметок не изменены: возможно, староста исправил их вручную или новые правила Firestore ещё не опубликованы.' : '.'),
@@ -1269,14 +1362,14 @@ async function saveAttendanceForAll(response) {
   }
 }
 
-function attendanceRecordRef(lessonId, studentId) {
-  const recordId = lessonId + '_' + state.attendanceDate + '_' + studentId;
+function attendanceRecordRef(lessonId, studentId, partKey = null) {
+  const recordId = attendanceDocumentId(lessonId, studentId, partKey);
   return doc(db, 'groups', state.group.id, 'attendanceRecords', recordId);
 }
 
-async function saveOfficialAttendance(studentId, lessonId, status) {
+async function saveOfficialAttendance(studentId, lessonId, status, partKey = null) {
   if (state.role !== 'leader') return;
-  const ref = attendanceRecordRef(lessonId, studentId);
+  const ref = attendanceRecordRef(lessonId, studentId, partKey);
   setBusy(true);
   try {
     if (!status) {
@@ -1287,6 +1380,7 @@ async function saveOfficialAttendance(studentId, lessonId, status) {
         studentId,
         lessonId,
         lessonDate: state.attendanceDate,
+        ...(partKey ? { partKey } : {}),
         status,
         reason: status === 'excused' ? 'Уважительная причина' : '',
         source: 'leader',
@@ -1305,14 +1399,15 @@ async function saveOfficialAttendance(studentId, lessonId, status) {
   }
 }
 
-async function markAllPresent(lessonId) {
+async function markAllPresent(lessonId, partKey = null) {
   if (state.role !== 'leader') return;
   const members = state.groupMembers || [];
   if (!members.length) {
     notify('В группе пока нет участников.');
     return;
   }
-  if (!window.confirm('Поставить отметку «Был» всем ' + members.length + ' участникам группы на эту пару? Текущие отметки будут заменены.')) return;
+  const partLabel = partKey ? ' на выбранную часть пары' : ' на эту пару';
+  if (!window.confirm('Поставить отметку «Был» всем ' + members.length + ' участникам группы' + partLabel + '? Текущие отметки будут заменены.')) return;
 
   setBusy(true);
   try {
@@ -1320,10 +1415,11 @@ async function markAllPresent(lessonId) {
       const batch = writeBatch(db);
       members.slice(offset, offset + 450).forEach(member => {
         const studentId = member.id || member.userId;
-        batch.set(attendanceRecordRef(lessonId, studentId), {
+        batch.set(attendanceRecordRef(lessonId, studentId, partKey), {
           studentId,
           lessonId,
           lessonDate: state.attendanceDate,
+          ...(partKey ? { partKey } : {}),
           status: 'present',
           reason: '',
           source: 'leader',
@@ -1344,21 +1440,22 @@ async function markAllPresent(lessonId) {
   }
 }
 
-async function excuseMissedStudents(lessonId, onlyStudentId = null) {
+async function excuseMissedStudents(lessonId, onlyStudentId = null, partKey = null) {
   if (state.role !== 'leader') return;
   const missing = state.attendance.filter(item =>
     item.lessonId === lessonId &&
     item.lessonDate === state.attendanceDate &&
+    attendancePartMatches(item, partKey) &&
     item.response === 'will_miss' &&
     (!onlyStudentId || item.userId === onlyStudentId)
   );
   if (!missing.length) {
-    notify('Нет студентов с ответом «Не буду».');
+    notify('Нет студентов с ответом «Не буду» на выбранную часть.');
     return;
   }
   const title = onlyStudentId
     ? 'Поставить этому студенту «Уважительная причина»?'
-    : 'Поставить «Уважительная причина» всем ' + missing.length + ' студентам, ответившим «Не буду»?';
+    : 'Поставить «Уважительная причина» всем ' + missing.length + ' студентам, ответившим «Не буду»' + (partKey ? ' на выбранную часть' : '') + '?';
   if (!window.confirm(title)) return;
 
   setBusy(true);
@@ -1366,10 +1463,11 @@ async function excuseMissedStudents(lessonId, onlyStudentId = null) {
     for (let offset = 0; offset < missing.length; offset += 450) {
       const batch = writeBatch(db);
       missing.slice(offset, offset + 450).forEach(item => {
-        batch.set(attendanceRecordRef(lessonId, item.userId), {
+        batch.set(attendanceRecordRef(lessonId, item.userId, partKey), {
           studentId: item.userId,
           lessonId,
           lessonDate: state.attendanceDate,
+          ...(partKey ? { partKey } : {}),
           status: 'excused',
           reason: 'Уважительная причина — предварительный ответ «Не буду»',
           source: 'leader',
@@ -2043,23 +2141,42 @@ function bindEvents() {
 
     if (button.dataset.attendanceLesson) {
       state.selectedAttendanceLessonId = button.dataset.attendanceLesson;
+      const selectedLesson = state.lessons.find(item => item.id === state.selectedAttendanceLessonId);
+      const parts = selectedLesson ? attendanceParts(selectedLesson) : [];
+      state.selectedAttendancePartKey = parts.length > 1 ? parts[0].partKey : null;
       renderWorkspace();
       root.querySelector('.attendance-register')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       return;
     }
+    if (button.dataset.attendancePart) {
+      state.selectedAttendanceLessonId = button.dataset.lesson;
+      state.selectedAttendancePartKey = button.dataset.attendancePart;
+      return renderWorkspace();
+    }
     if (button.dataset.attendanceAll) return saveAttendanceForAll(button.dataset.attendanceAll);
     if (button.dataset.officialStatus) {
-      const current = state.attendanceRecords.find(item =>
+      const partKey = button.dataset.partKey || null;
+      const current = attendanceItemForPart(
+        state.attendanceRecords,
+        button.dataset.lesson,
+        button.dataset.student,
+        partKey,
+        'studentId'
+      );
+      const hasExactPartRecord = state.attendanceRecords.some(item =>
         item.studentId === button.dataset.student &&
         item.lessonId === button.dataset.lesson &&
-        item.lessonDate === state.attendanceDate
+        item.lessonDate === state.attendanceDate &&
+        (partKey ? item.partKey === partKey : !item.partKey)
       );
-      const status = current?.status === button.dataset.officialStatus ? '' : button.dataset.officialStatus;
-      return saveOfficialAttendance(button.dataset.student, button.dataset.lesson, status);
+      const status = current?.status === button.dataset.officialStatus
+        ? (partKey && !hasExactPartRecord ? 'unmarked' : '')
+        : button.dataset.officialStatus;
+      return saveOfficialAttendance(button.dataset.student, button.dataset.lesson, status, partKey);
     }
-    if (button.dataset.action === 'mark-all-present') return markAllPresent(button.dataset.lesson);
-    if (button.dataset.action === 'excuse-all-missed') return excuseMissedStudents(button.dataset.lesson);
-    if (button.dataset.attendance) return saveAttendance(button.dataset.lesson, button.dataset.attendance);
+    if (button.dataset.action === 'mark-all-present') return markAllPresent(button.dataset.lesson, button.dataset.partKey || null);
+    if (button.dataset.action === 'excuse-all-missed') return excuseMissedStudents(button.dataset.lesson, null, button.dataset.partKey || null);
+    if (button.dataset.attendance) return saveAttendance(button.dataset.lesson, button.dataset.attendance, button.dataset.partKey || null);
 
     if (button.dataset.action === 'open-lesson-cell') {
       state.scheduleEditorSlot = {
@@ -2107,6 +2224,7 @@ function bindEvents() {
     if (event.target.id === 'attendance-date' && event.target.value) {
       state.attendanceDate = event.target.value;
       state.selectedAttendanceLessonId = null;
+      state.selectedAttendancePartKey = null;
       try { await loadWorkspace(); renderWorkspace(); }
       catch (error) { notify(error.message, 'error'); }
     }
