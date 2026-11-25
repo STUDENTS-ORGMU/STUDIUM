@@ -1,0 +1,255 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function memberPath(groupId, userId) {
+      return /databases/$(database)/documents/groups/$(groupId)/members/$(userId);
+    }
+
+    function isMember(groupId) {
+      return signedIn() && exists(memberPath(groupId, request.auth.uid));
+    }
+
+    function isLeader(groupId) {
+      return isMember(groupId)
+        && get(memberPath(groupId, request.auth.uid)).data.role == 'leader';
+    }
+
+    function validTitle(value) {
+      return value is string && value.size() > 0 && value.size() <= 180;
+    }
+
+    match /users/{userId} {
+      allow get: if signedIn() && request.auth.uid == userId;
+      allow list: if false;
+      allow create: if signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly(['fullName', 'email', 'createdAt', 'updatedAt'])
+        && request.resource.data.fullName is string
+        && request.resource.data.email is string;
+      allow update: if signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fullName', 'updatedAt'])
+        && request.resource.data.fullName is string
+        && request.resource.data.fullName.size() <= 80;
+      allow delete: if false;
+
+      match /groups/{groupId} {
+        allow get, list: if signedIn() && request.auth.uid == userId;
+        allow create: if signedIn()
+          && request.auth.uid == userId
+          && request.resource.data.groupId == groupId
+          && existsAfter(memberPath(groupId, userId))
+          && getAfter(memberPath(groupId, userId)).data.userId == userId
+          && getAfter(memberPath(groupId, userId)).data.role == request.resource.data.role;
+        allow update, delete: if false;
+      }
+    }
+
+    match /inviteCodes/{code} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['groupId', 'createdBy', 'createdAt'])
+        && request.resource.data.createdBy == request.auth.uid
+        && existsAfter(/databases/$(database)/documents/groups/$(request.resource.data.groupId))
+        && getAfter(/databases/$(database)/documents/groups/$(request.resource.data.groupId)).data.createdBy == request.auth.uid
+        && existsAfter(memberPath(request.resource.data.groupId, request.auth.uid))
+        && getAfter(memberPath(request.resource.data.groupId, request.auth.uid)).data.role == 'leader';
+      allow update: if false;
+      allow delete: if signedIn() && isLeader(resource.data.groupId);
+    }
+
+    match /groups/{groupId} {
+      allow get: if isMember(groupId);
+      allow list: if false;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['name', 'inviteCode', 'createdBy', 'studyCycleStart', 'createdAt', 'updatedAt'])
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 2
+        && request.resource.data.name.size() <= 80
+        && request.resource.data.inviteCode is string
+        && existsAfter(memberPath(groupId, request.auth.uid))
+        && getAfter(memberPath(groupId, request.auth.uid)).data.role == 'leader'
+        && existsAfter(/databases/$(database)/documents/inviteCodes/$(request.resource.data.inviteCode))
+        && getAfter(/databases/$(database)/documents/inviteCodes/$(request.resource.data.inviteCode)).data.groupId == groupId;
+      allow update: if isLeader(groupId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'studyCycleStart', 'updatedAt'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 2
+        && request.resource.data.name.size() <= 80;
+      allow delete: if false;
+
+      match /members/{memberId} {
+        allow get: if signedIn() && (memberId == request.auth.uid || isLeader(groupId));
+        allow list: if isLeader(groupId);
+        allow create: if signedIn()
+          && memberId == request.auth.uid
+          && request.resource.data.userId == request.auth.uid
+          && request.resource.data.displayName is string
+          && (
+            (
+              request.resource.data.role == 'leader'
+              && existsAfter(/databases/$(database)/documents/groups/$(groupId))
+              && getAfter(/databases/$(database)/documents/groups/$(groupId)).data.createdBy == request.auth.uid
+            )
+            ||
+            (
+              request.resource.data.role == 'student'
+              && request.resource.data.inviteCodeUsed is string
+              && exists(/databases/$(database)/documents/inviteCodes/$(request.resource.data.inviteCodeUsed))
+              && get(/databases/$(database)/documents/inviteCodes/$(request.resource.data.inviteCodeUsed)).data.groupId == groupId
+            )
+          );
+        allow update: if false;
+        allow delete: if isLeader(groupId) && memberId != request.auth.uid;
+      }
+
+      match /tasks/{taskId} {
+        allow get, list: if isMember(groupId);
+        allow create: if isLeader(groupId)
+          && request.resource.data.keys().hasOnly([
+            'subject', 'title', 'description', 'lessonDate', 'dueDate',
+            'createdBy', 'createdAt', 'updatedAt', 'sourceSuggestionId'
+          ])
+          && request.resource.data.createdBy == request.auth.uid
+          && validTitle(request.resource.data.title)
+          && (
+            request.resource.data.sourceSuggestionId == null
+            ||
+            (
+              request.resource.data.sourceSuggestionId is string
+              && getAfter(/databases/$(database)/documents/groups/$(groupId)/taskSuggestions/$(request.resource.data.sourceSuggestionId)).data.status == 'approved'
+              && getAfter(/databases/$(database)/documents/groups/$(groupId)/taskSuggestions/$(request.resource.data.sourceSuggestionId)).data.reviewedBy == request.auth.uid
+              && getAfter(/databases/$(database)/documents/groups/$(groupId)/taskSuggestions/$(request.resource.data.sourceSuggestionId)).data.publishedTaskId == taskId
+            )
+          );
+        allow update, delete: if isLeader(groupId);
+      }
+
+      match /taskSuggestions/{suggestionId} {
+        allow get, list: if signedIn()
+          && (resource.data.submittedBy == request.auth.uid || isLeader(groupId));
+        allow create: if isMember(groupId)
+          && request.resource.data.keys().hasOnly([
+            'submittedBy', 'subject', 'title', 'description',
+            'lessonDate', 'dueDate', 'status', 'createdAt'
+          ])
+          && request.resource.data.submittedBy == request.auth.uid
+          && request.resource.data.status == 'pending'
+          && validTitle(request.resource.data.title);
+        allow update: if isLeader(groupId)
+          && resource.data.status == 'pending'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status', 'reviewedBy', 'reviewedAt', 'publishedTaskId'
+          ])
+          && request.resource.data.reviewedBy == request.auth.uid
+          && request.resource.data.reviewedAt == request.time
+          && (
+            (
+              request.resource.data.status == 'approved'
+              && request.resource.data.publishedTaskId is string
+              && getAfter(/databases/$(database)/documents/groups/$(groupId)/tasks/$(request.resource.data.publishedTaskId)).data.sourceSuggestionId == suggestionId
+            )
+            ||
+            (
+              request.resource.data.status == 'rejected'
+              && !request.resource.data.keys().hasAny(['publishedTaskId'])
+            )
+          );
+        allow delete: if false;
+      }
+
+      match /taskProgress/{progressId} {
+        allow get, list: if isMember(groupId)
+          && (resource.data.userId == request.auth.uid || isLeader(groupId));
+        allow create: if isMember(groupId)
+          && request.resource.data.userId == request.auth.uid
+          && request.resource.data.taskId is string
+          && request.resource.data.completed is bool
+          && exists(/databases/$(database)/documents/groups/$(groupId)/tasks/$(request.resource.data.taskId));
+        allow update: if isMember(groupId)
+          && resource.data.userId == request.auth.uid
+          && request.resource.data.userId == request.auth.uid
+          && request.resource.data.taskId == resource.data.taskId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['completed', 'updatedAt'])
+          && request.resource.data.completed is bool;
+        allow delete: if isMember(groupId) && resource.data.userId == request.auth.uid;
+      }
+
+      match /lessons/{lessonId} {
+        allow get, list: if isMember(groupId);
+        allow create: if isLeader(groupId)
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.subject is string
+          && request.resource.data.subject.size() > 0
+          && request.resource.data.weekday is int
+          && request.resource.data.weekday >= 1
+          && request.resource.data.weekday <= 6
+          && request.resource.data.weekNumber in [1, 2]
+          && request.resource.data.startsAt is string;
+        allow update, delete: if isLeader(groupId);
+      }
+
+      match /attendanceResponses/{responseId} {
+        allow get, list: if isMember(groupId)
+          && (resource.data.userId == request.auth.uid || isLeader(groupId));
+        allow create: if isMember(groupId)
+          && request.resource.data.userId == request.auth.uid
+          && request.resource.data.lessonId is string
+          && request.resource.data.lessonDate is string
+          && request.resource.data.response in ['will_attend', 'will_miss']
+          && exists(/databases/$(database)/documents/groups/$(groupId)/lessons/$(request.resource.data.lessonId));
+        allow update: if isMember(groupId)
+          && resource.data.userId == request.auth.uid
+          && request.resource.data.userId == request.auth.uid
+          && request.resource.data.lessonId == resource.data.lessonId
+          && request.resource.data.lessonDate == resource.data.lessonDate
+          && request.resource.data.response in ['will_attend', 'will_miss'];
+        allow delete: if isMember(groupId) && resource.data.userId == request.auth.uid;
+      }
+
+      match /attendanceRecords/{recordId} {
+        allow get, list: if isLeader(groupId);
+        allow create: if isLeader(groupId)
+          && request.resource.data.markedBy == request.auth.uid
+          && request.resource.data.studentId is string
+          && exists(/databases/$(database)/documents/groups/$(groupId)/members/$(request.resource.data.studentId))
+          && exists(/databases/$(database)/documents/groups/$(groupId)/lessons/$(request.resource.data.lessonId))
+          && request.resource.data.status in ['present', 'absent', 'late', 'excused'];
+        allow update: if isLeader(groupId)
+          && request.resource.data.markedBy == request.auth.uid
+          && request.resource.data.studentId == resource.data.studentId
+          && request.resource.data.lessonId == resource.data.lessonId
+          && request.resource.data.lessonDate == resource.data.lessonDate
+          && request.resource.data.status in ['present', 'absent', 'late', 'excused'];
+        allow delete: if isLeader(groupId);
+      }
+
+      match /materials/{materialId} {
+        allow get, list: if isMember(groupId);
+        allow create: if isLeader(groupId)
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.title is string
+          && request.resource.data.title.size() > 0
+          && (request.resource.data.externalUrl is string || request.resource.data.storagePath is string);
+        allow update, delete: if isLeader(groupId);
+      }
+
+      match /lectures/{lectureId} {
+        allow get, list: if isMember(groupId);
+        allow create: if isLeader(groupId)
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.title is string
+          && request.resource.data.title.size() > 0
+          && (request.resource.data.externalUrl is string || request.resource.data.storagePath is string);
+        allow update, delete: if isLeader(groupId);
+      }
+    }
+  }
+}
