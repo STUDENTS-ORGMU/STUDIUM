@@ -152,3 +152,46 @@
 .group-cycle-panel>p{font-size:12px}
 .group-cycle-panel form{max-width:420px;margin-top:14px}
 @media(max-width:800px){.group-overview{grid-template-columns:1fr}.group-invite-card{align-items:flex-start;flex-direction:column}.group-invite-card .btn{width:100%}}
+
+
+/* Selected lesson metadata in the homework form */
+.task-compose-inline .task-selected-lesson{width:100%;margin:0 0 16px}
+.task-compose-inline .task-selected-lesson-details{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:10px;
+  width:100%;
+}
+.task-compose-inline .task-selected-lesson-details>div{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:6px;
+  padding:12px 14px;
+  background:#f8f7f5;
+  border:1px solid #ebe9e4;
+  border-radius:11px;
+}
+.task-compose-inline .task-selected-lesson-details small{
+  display:block;
+  margin:0;
+  color:#85847e;
+  font-size:10px;
+  font-weight:600;
+  line-height:1.3;
+}
+.task-compose-inline .task-selected-lesson-details strong{
+  display:block;
+  color:#171717;
+  font-size:13px;
+  font-weight:700;
+  line-height:1.4;
+  overflow-wrap:anywhere;
+}
+@media(max-width:900px){
+  .task-compose-inline .task-selected-lesson-details{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:480px){
+  .task-compose-inline .task-selected-lesson-details{grid-template-columns:1fr}
+}
