@@ -28,7 +28,7 @@ const normalizeUsername = value => String(value ?? '').trim().toLowerCase();
 const validUsername = value => /^[a-z0-9][a-z0-9._-]{2,23}$/.test(value);
 // Firebase Email/Password requires an email-shaped identifier. This reserved
 // project-local alias is internal only; users enter and see their username.
-const authEmailForUsername = username => `${username}@studium-99b06.firebaseapp.com`;
+const authEmailForUsername = username => `${username}@${import.meta.env.VITE_FIREBASE_AUTH_DOMAIN}`;
 const fallbackUsername = uid => `student_${String(uid).slice(0, 8).toLowerCase()}`;
 
 const today = () => {
