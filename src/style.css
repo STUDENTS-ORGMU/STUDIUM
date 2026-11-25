@@ -209,3 +209,188 @@
 .task-card.done .task-copy h3{color:#77766f}
 .task-card.done .task-copy{opacity:.78}
 .task-card.done .task-card-actions{opacity:1}
+
+
+/* Compact light STUDIUM attendance page */
+.content>.student-attendance-page{
+  width:100%;
+  max-width:920px;
+  margin:0 auto;
+  padding:20px 22px;
+  background:#fff;
+  color:var(--ink);
+  border:1px solid var(--line);
+  border-radius:16px;
+  box-shadow:0 8px 28px #17171706;
+}
+.content>.student-attendance-page .student-attendance-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:18px;
+  margin:0 0 6px;
+}
+.content>.student-attendance-page .student-attendance-header h1{
+  margin:0 0 4px;
+  color:#171717;
+  font:700 clamp(21px,2.4vw,25px) Manrope,sans-serif;
+  letter-spacing:-.035em;
+}
+.content>.student-attendance-page .student-attendance-header p,
+.content>.student-attendance-page .student-attendance-caption{
+  color:#777773;
+  font-size:12px;
+}
+.content>.student-attendance-page .student-attendance-date{
+  width:auto;
+  min-width:150px;
+}
+.content>.student-attendance-page .student-attendance-date label{
+  color:#777773;
+}
+.content>.student-attendance-page .student-attendance-date input{
+  background:#fff;
+  color:#171717;
+  border:1px solid #deddd8;
+  border-radius:9px;
+  padding:8px 10px;
+  color-scheme:light;
+  font-size:12px;
+}
+.content>.student-attendance-page .student-attendance-caption{
+  margin:10px 0 14px;
+}
+.content>.student-attendance-page .attendance-all-actions{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:9px;
+  margin:0 0 13px;
+}
+.content>.student-attendance-page .attendance-all-button{
+  min-height:45px;
+  padding:9px 12px;
+  border:1px solid #deddd8;
+  border-radius:11px;
+  background:#fff;
+  color:#171717;
+  font:600 13px Manrope,sans-serif;
+}
+.content>.student-attendance-page .attendance-all-button:hover{
+  background:#f8f7f5;
+  border-color:#aaa79f;
+}
+.content>.student-attendance-page .attendance-all-button.active{
+  background:#f1f0ed;
+  border-color:#171717;
+  color:#171717;
+  box-shadow:inset 0 0 0 1px #171717;
+}
+.content>.student-attendance-page .student-attendance-lessons{
+  gap:9px;
+}
+.content>.student-attendance-page .student-attendance-lesson{
+  padding:12px 14px;
+  border:1px solid #e7e6e2;
+  border-radius:12px;
+  background:#fff;
+  color:#171717;
+}
+.content>.student-attendance-page .student-attendance-lesson-title{
+  align-items:center;
+  margin:0 0 9px;
+}
+.content>.student-attendance-page .student-attendance-lesson-title small{
+  margin:0 0 4px;
+  color:#85847e;
+  font-size:10px;
+}
+.content>.student-attendance-page .student-attendance-lesson-title h2{
+  margin:0;
+  color:#171717;
+  font:700 15px Manrope,sans-serif;
+}
+.content>.student-attendance-page .student-attendance-lesson-title p{
+  color:#777773;
+  font-size:11px;
+  margin:3px 0 0;
+}
+.content>.student-attendance-page .attendance-response{
+  padding:5px 8px;
+  border-radius:999px;
+  font-size:9px;
+}
+.content>.student-attendance-page .attendance-response.will-attend{
+  background:#f0f4f0;
+  color:#41664a;
+}
+.content>.student-attendance-page .attendance-response.will-miss{
+  background:#f7efed;
+  color:#8a443b;
+}
+.content>.student-attendance-page .attendance-response.no-response{
+  background:#f3f2ef;
+  color:#777773;
+}
+.content>.student-attendance-page .student-attendance-lesson-actions{
+  gap:8px;
+}
+.content>.student-attendance-page .attendance-choice{
+  min-height:39px;
+  padding:8px 10px;
+  border:1px solid #deddd8;
+  border-radius:10px;
+  background:#fff;
+  color:#171717;
+  font:600 12px Manrope,sans-serif;
+}
+.content>.student-attendance-page .attendance-choice:hover{
+  background:#f8f7f5;
+  border-color:#aaa79f;
+}
+.content>.student-attendance-page .attendance-choice.active.attend{
+  background:#f1f0ed;
+  border-color:#171717;
+  color:#171717;
+  box-shadow:inset 0 0 0 1px #171717;
+}
+.content>.student-attendance-page .attendance-choice.active.miss{
+  background:#f7efed;
+  border-color:#bd8b83;
+  color:#813f37;
+}
+.content>.student-attendance-page .empty{
+  background:#fff;
+  border-color:#deddd8;
+  color:#171717;
+}
+@media(max-width:680px){
+  .content>.student-attendance-page{
+    padding:15px 13px;
+    border-radius:13px;
+  }
+  .content>.student-attendance-page .student-attendance-header{
+    align-items:flex-start;
+    flex-direction:column;
+    gap:10px;
+  }
+  .content>.student-attendance-page .student-attendance-date{
+    width:100%;
+  }
+  .content>.student-attendance-page .attendance-all-actions{
+    grid-template-columns:1fr;
+  }
+  .content>.student-attendance-page .attendance-all-button{
+    min-height:42px;
+    font-size:12px;
+  }
+  .content>.student-attendance-page .student-attendance-lesson{
+    padding:11px;
+  }
+  .content>.student-attendance-page .student-attendance-lesson-title h2{
+    font-size:14px;
+  }
+  .content>.student-attendance-page .attendance-choice{
+    min-height:38px;
+    font-size:11px;
+  }
+}
