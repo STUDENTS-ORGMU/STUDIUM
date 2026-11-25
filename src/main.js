@@ -1412,44 +1412,22 @@ function renderAttendance() {
 async function saveAttendance(lessonId, response, partKey = null) {
   setBusy(true);
   try {
-    const { error: responseError } = await supabase.rpc('save_my_attendance_response', {
+    const { error } = await supabase.rpc('save_my_attendance_response', {
       p_group_id: state.group.id,
       p_lesson_id: lessonId,
       p_lesson_date: state.attendanceDate,
       p_part_key: partKey || '',
       p_response: response
     });
-    if (responseError) throw responseError;
+    if (error) throw error;
 
-    let autoMarked = true;
-    try {
-      const status = response === 'will_attend' ? 'present' : 'absent';
-      await setDoc(attendanceRecordRef(lessonId, state.user.uid, partKey), {
-        studentId: state.user.uid,
-        lessonId,
-        lessonDate: state.attendanceDate,
-        ...(partKey ? { partKey } : {}),
-        status,
-        reason: 'Автоматическая отметка по ответу студента',
-        source: 'student_response',
-        markedBy: state.user.uid,
-        markedAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      }, { merge: true });
-    } catch (markError) {
-      if (markError.code !== 'permission-denied') throw markError;
-      autoMarked = false;
-    }
-
-    notify(
-      autoMarked
-        ? (response === 'will_attend' ? 'Ответ сохранён. В журнале автоматически отмечено «Был».' : 'Ответ сохранён. В журнале автоматически отмечено «Неуваж.» — староста может изменить отметку.')
-        : 'Ответ сохранён. Автоматическая отметка не изменила журнал: возможно, староста уже исправил её вручную или права доступа Supabase не позволяют изменить запись.',
-      'success'
-    );
+    // A student's answer is a preliminary response, not an official register mark.
+    // Only the group leader may edit attendanceRecords.
     await loadWorkspace();
     renderWorkspace();
+    notify(response === 'will_attend' ? 'Ответ сохранён: будешь на занятии.' : 'Ответ сохранён: не будешь на занятии.', 'success');
   } catch (error) {
+    console.error('STUDIUM attendance response save failed:', error);
     notify(error.message || 'Не удалось сохранить ответ.', 'error');
   } finally {
     setBusy(false);
@@ -1468,7 +1446,7 @@ async function saveAttendanceForAll(response) {
   if (!entries.length) return notify('На эту дату пар нет.');
   setBusy(true);
   try {
-    const responseResults = await Promise.all(entries.map(({lesson,part}) =>
+    const results = await Promise.all(entries.map(({lesson,part}) =>
       supabase.rpc('save_my_attendance_response', {
         p_group_id: state.group.id,
         p_lesson_id: lesson.id,
@@ -1477,41 +1455,16 @@ async function saveAttendanceForAll(response) {
         p_response: response
       })
     ));
-    const responseError = responseResults.find(result => result.error)?.error;
-    if (responseError) throw responseError;
+    const failed = results.find(result => result.error);
+    if (failed?.error) throw failed.error;
 
-    let automaticCount = 0;
-    let protectedCount = 0;
-    await Promise.all(entries.map(async ({lesson,part}) => {
-      try {
-        await setDoc(attendanceRecordRef(lesson.id, state.user.uid, part.partKey), {
-          studentId: state.user.uid,
-          lessonId: lesson.id,
-          lessonDate: state.attendanceDate,
-          ...(part.partKey ? { partKey: part.partKey } : {}),
-          status: response === 'will_attend' ? 'present' : 'absent',
-          reason: 'Автоматическая отметка по ответу студента',
-          source: 'student_response',
-          markedBy: state.user.uid,
-          markedAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        }, { merge: true });
-        automaticCount += 1;
-      } catch (markError) {
-        if (markError.code !== 'permission-denied') throw markError;
-        protectedCount += 1;
-      }
-    }));
-
-    const label = response === 'will_attend' ? 'Буду на всех парах и частях' : 'Не буду на всех парах и частях';
-    notify(
-      label + '. Автоматически выставлено отметок: ' + automaticCount +
-      (protectedCount ? '. Ещё ' + protectedCount + ' отметок не изменены: возможно, староста исправил их вручную или права доступа Supabase не позволяют изменить запись.' : '.'),
-      'success'
-    );
     await loadWorkspace();
     renderWorkspace();
+    notify(response === 'will_attend'
+      ? 'Ответ сохранён для всех пар и частей.'
+      : 'Ответ сохранён для всех пар и частей.');
   } catch (error) {
+    console.error('STUDIUM bulk attendance response save failed:', error);
     notify(error.message || 'Не удалось сохранить ответы на все пары.', 'error');
   } finally {
     setBusy(false);
