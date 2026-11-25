@@ -34,6 +34,7 @@ STUDIUM — платформа для учебных групп. Клиентс�
    - `202611260003_student_record_policies.sql`
    - `202611260004_grant_authenticated_data_api.sql`
    - `202611260005_revoke_rls_auto_enable.sql`
+   - `202611260006_member_display_name.sql`
 4. В Project Settings → API скопируй Project URL и publishable key.
 5. Создай локальный `.env` на основе `.env.example` и укажи:
    - `VITE_SUPABASE_URL`
