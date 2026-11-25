@@ -17,7 +17,7 @@ create table if not exists public.group_members (
  group_id text not null references public.study_groups(id) on delete cascade,
  user_id uuid not null references public.profiles(id) on delete cascade,
  role text not null check(role in ('leader','student')), display_name text not null default '',
- legacy_firebase_uid text, data jsonb not null default '{}'::jsonb,
+ data jsonb not null default '{}'::jsonb,
  joined_at timestamptz not null default now(), primary key(group_id,user_id)
 );
 create table if not exists public.invite_codes (
