@@ -341,13 +341,156 @@ function renderModeration() {
     (reviewed.length ? '<section class="section"><h2>Рассмотренные предложения</h2><div class="history">' + reviewed.slice(0,8).map(item => '<div><span>' + esc(item.title) + '</span><span class="status ' + item.status + '">' + (item.status === 'approved' ? 'Опубликовано' : 'Отклонено') + '</span></div>').join('') + '</div></section>' : '');
 }
 
+const schedulePeriods = [
+  { start: '08:30', end: '10:05', label: '1-я пара' },
+  { start: '10:30', end: '12:05', label: '2-я пара' },
+  { start: '13:00', end: '14:35', label: '3-я пара' },
+  { start: '15:00', end: '16:35', label: '4-я пара' }
+];
+
+function timeToMinutes(value) {
+  const match = /^(\\d{2}):(\\d{2})$/.exec(String(value || ''));
+  return match ? Number(match[1]) * 60 + Number(match[2]) : null;
+}
+
+function closestPeriodIndex(value, field) {
+  const minutes = timeToMinutes(value);
+  if (minutes === null) return -1;
+  let bestIndex = -1;
+  let bestDistance = Infinity;
+  schedulePeriods.forEach((period, index) => {
+    const target = timeToMinutes(period[field]);
+    const distance = Math.abs(target - minutes);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestIndex = index;
+    }
+  });
+  return bestDistance <= 12 ? bestIndex : -1;
+}
+
+function lessonStartIndex(lesson) {
+  return closestPeriodIndex(lesson.startsAt, 'start');
+}
+
+function lessonSpan(lesson, startIndex) {
+  const saved = Number(lesson.periodCount);
+  if (Number.isInteger(saved) && saved >= 1 && saved <= 4) {
+    return Math.min(saved, schedulePeriods.length - startIndex);
+  }
+  const endIndex = closestPeriodIndex(lesson.endsAt, 'end');
+  if (endIndex >= startIndex) return Math.min(endIndex - startIndex + 1, schedulePeriods.length - startIndex);
+  return 1;
+}
+
+function scheduleLessonCard(lesson, startIndex, span) {
+  const periods = schedulePeriods.slice(startIndex, startIndex + span);
+  const times = periods.map((period, index) =>
+    '<span>' + period.start + '–' + period.end + (span > 1 ? ' · ' + period.label : '') + '</span>'
+  ).join('');
+  return '<article class="schedule-lesson" style="grid-row:span ' + span + '">' +
+    '<div class="schedule-times">' + times + '</div>' +
+    '<strong>' + esc(lesson.subject) + '</strong>' +
+    (lesson.room ? '<small class="schedule-room">' + esc(lesson.room) + '</small>' : '') +
+    (lesson.description ? '<p class="schedule-description">' + esc(lesson.description) + '</p>' : '') +
+    (state.role === 'leader' ? '<button type="button" class="lesson-delete" title="Удалить пару" aria-label="Удалить пару" data-action="delete-lesson" data-id="' + esc(lesson.id) + '">×</button>' : '') +
+    '</article>';
+}
+
+function renderScheduleDay(weekNumber, weekday, todayInfo, tomorrowInfo) {
+  const names = ['','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'];
+  const lessons = state.lessons
+    .filter(item => Number(item.weekNumber) === weekNumber && Number(item.weekday) === weekday)
+    .map(item => ({ ...item, startIndex: lessonStartIndex(item) }))
+    .sort((a,b) => a.startIndex - b.startIndex || String(a.startsAt).localeCompare(String(b.startsAt)));
+  const occupied = new Set();
+  const byStart = new Map();
+  lessons.filter(item => item.startIndex >= 0).forEach(item => {
+    if (!byStart.has(item.startIndex)) byStart.set(item.startIndex, []);
+    byStart.get(item.startIndex).push(item);
+  });
+
+  const slotMarkup = [];
+  for (let slot = 0; slot < schedulePeriods.length;) {
+    const items = byStart.get(slot) || [];
+    const available = items.filter(item => {
+      const span = lessonSpan(item, slot);
+      return !Array.from({length:span}, (_,offset)=>slot+offset).some(index=>occupied.has(index));
+    });
+    if (available.length) {
+      available.forEach((item, index) => {
+        const span = index === 0 && available.length === 1 ? lessonSpan(item, slot) : 1;
+        slotMarkup.push(scheduleLessonCard(item, slot, span));
+        for (let offset = 0; offset < span; offset++) occupied.add(slot + offset);
+      });
+      slot++;
+      while (slot < schedulePeriods.length && occupied.has(slot)) slot++;
+    } else {
+      const period = schedulePeriods[slot];
+      slotMarkup.push('<div class="schedule-empty-slot"><span>' + period.start + '–' + period.end + '</span><small>Свободно</small></div>');
+      slot++;
+    }
+  }
+
+  const outside = lessons.filter(item => item.startIndex < 0);
+  const dateClass = todayInfo.weekNumber === weekNumber && todayInfo.weekday === weekday
+    ? ' is-today'
+    : (tomorrowInfo.weekNumber === weekNumber && tomorrowInfo.weekday === weekday ? ' is-tomorrow' : '');
+  const badge = dateClass.includes('is-today') ? '<span class="day-badge today-badge">Сегодня</span>'
+    : (dateClass.includes('is-tomorrow') ? '<span class="day-badge tomorrow-badge">Завтра</span>' : '');
+  return '<article class="schedule-day' + dateClass + '">' +
+    '<header class="schedule-day-header"><strong>' + names[weekday] + '</strong>' + badge + '</header>' +
+    '<div class="schedule-slots">' + slotMarkup.join('') + '</div>' +
+    (outside.length ? '<div class="schedule-unplaced">' + outside.map(item => scheduleLessonCard(item, 0, 1)).join('') + '</div>' : '') +
+    '</article>';
+}
+
+function localDateParts(date) {
+  return {
+    iso: [date.getFullYear(), String(date.getMonth()+1).padStart(2,'0'), String(date.getDate()).padStart(2,'0')].join('-'),
+    weekday: ((date.getDay() + 6) % 7) + 1,
+    label: date.toLocaleDateString('ru-RU', { weekday:'long', day:'numeric', month:'long' })
+  };
+}
+
 function renderSchedule() {
-  const days = ['','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'];
+  const todayDate = new Date();
+  const tomorrowDate = new Date();
+  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+  const todayInfo = { ...localDateParts(todayDate), weekNumber: lessonWeekFor(localDateParts(todayDate).iso) };
+  const tomorrowInfo = { ...localDateParts(tomorrowDate), weekNumber: lessonWeekFor(localDateParts(tomorrowDate).iso) };
+  const currentWeek = todayInfo.weekNumber;
+  const nextWeek = currentWeek === 1 ? 2 : 1;
   const add = state.role === 'leader' ? '<button class="btn primary" data-action="show-lesson">＋ Добавить пару</button>' : '';
-  const rows = state.lessons.map(item => '<article class="lesson"><time>' + esc(item.startsAt) + (item.endsAt ? '–' + esc(item.endsAt) : '') + '</time><div><small>' + days[item.weekday] + ' · ' + (item.weekNumber === 2 ? 'II неделя' : 'I неделя') + '</small><strong>' + esc(item.subject) + '</strong><p>' + esc(item.room || 'Аудитория не указана') + '</p></div>' + (state.role === 'leader' ? '<button type="button" class="btn danger lesson-delete" data-action="delete-lesson" data-id="' + esc(item.id) + '">Удалить пару</button>' : '') + '</article>').join('');
-  return heading('РАСПИСАНИЕ', 'Занятия группы', 'Расписание на чередующиеся учебные недели.', add) +
-    (state.role === 'leader' ? '<section class="panel inline-form hidden" id="lesson-editor"><form id="lesson-form" class="form"><h2>Новая пара</h2><label>Предмет<input name="subject" required maxlength="120"></label><div class="two"><label>День<select name="weekday"><option value="1">Понедельник</option><option value="2">Вторник</option><option value="3">Среда</option><option value="4">Четверг</option><option value="5">Пятница</option><option value="6">Суббота</option></select></label><label>Неделя<select name="weekNumber"><option value="1">Первая</option><option value="2">Вторая</option></select></label></div><div class="two"><label>Начало<input name="startsAt" type="time" value="08:30" required></label><label>Конец<input name="endsAt" type="time" value="10:05"></label></div><label>Аудитория<input name="room" maxlength="40"></label><button class="btn primary">Сохранить</button><button type="button" class="btn ghost" data-action="hide-lesson">Отмена</button></form></section>' : '') +
-    (rows ? '<div class="lesson-list">' + rows + '</div>' : empty('Расписание пока пустое', 'Староста сможет добавить пары в этом разделе.'));
+  const weekNames = {1:'Первая',2:'Вторая'};
+  const weekSummary = '<div class="schedule-summary">' +
+    '<article><small>ТЕКУЩАЯ УЧЕБНАЯ НЕДЕЛЯ</small><strong>' + weekNames[currentWeek] + '</strong></article>' +
+    '<article><small>СЛЕДУЮЩАЯ УЧЕБНАЯ НЕДЕЛЯ</small><strong>' + weekNames[nextWeek] + '</strong></article>' +
+    '<article class="date-highlight today-highlight"><small>СЕГОДНЯ</small><strong>' + esc(todayInfo.label) + '</strong></article>' +
+    '<article class="date-highlight tomorrow-highlight"><small>ЗАВТРА</small><strong>' + esc(tomorrowInfo.label) + '</strong></article>' +
+    '</div>';
+  const editor = state.role === 'leader'
+    ? '<section class="panel schedule-editor hidden" id="lesson-editor"><div class="schedule-editor-heading"><div><p class="eyebrow">УПРАВЛЕНИЕ РАСПИСАНИЕМ</p><h2>Добавить пару</h2><p class="muted">Выбери день, учебную неделю и временной слот. Время заполнится автоматически.</p></div></div>' +
+      '<form id="lesson-form" class="form schedule-form">' +
+      '<label>Предмет<input name="subject" required maxlength="120" placeholder="Например, Анатомия"></label>' +
+      '<div class="schedule-form-grid">' +
+      '<label>Учебная неделя<select name="weekNumber"><option value="1">Первая неделя</option><option value="2">Вторая неделя</option></select></label>' +
+      '<label>День недели<select name="weekday"><option value="1">Понедельник</option><option value="2">Вторник</option><option value="3">Среда</option><option value="4">Четверг</option><option value="5">Пятница</option><option value="6">Суббота</option></select></label>' +
+      '<label>Начало<select name="startPeriod"><option value="0">1-я · 08:30–10:05</option><option value="1">2-я · 10:30–12:05</option><option value="2">3-я · 13:00–14:35</option><option value="3">4-я · 15:00–16:35</option></select></label>' +
+      '<label>Продолжительность<select name="periodCount"><option value="1">Одна пара</option><option value="2">Две пары подряд</option><option value="3">Три пары подряд</option></select></label>' +
+      '</div>' +
+      '<div class="schedule-form-grid">' +
+      '<label>Аудитория<input name="room" maxlength="60" placeholder="Например, 2С"></label>' +
+      '<label>ДЗ / примечание<input name="description" maxlength="220" placeholder="Что подготовить к занятию"></label>' +
+      '</div>' +
+      '<div class="schedule-form-actions"><button class="btn primary" type="submit">Сохранить пару</button><button type="button" class="btn ghost" data-action="hide-lesson">Отмена</button></div>' +
+      '</form></section>'
+    : '';
+  const weeks = [1,2].map(week => '<section class="schedule-week"><div class="schedule-week-title"><p class="eyebrow">' + weekNames[week] + ' УЧЕБНАЯ НЕДЕЛЯ</p></div><div class="schedule-grid">' +
+    [1,2,3,4,5,6].map(day => renderScheduleDay(week, day, todayInfo, tomorrowInfo)).join('') +
+    '</div></section>').join('');
+  return heading('РАСПИСАНИЕ', 'Расписание группы', 'Занятия на первой и второй учебной неделе.', add) +
+    weekSummary + editor + weeks;
 }
 
 function lessonWeekFor(date) {
@@ -398,7 +541,12 @@ function bindEvents() {
     if (button.dataset.tab) { state.tab = button.dataset.tab; return renderWorkspace(); }
     if (button.dataset.action === 'logout') return doSignOut();
     if (button.dataset.action === 'menu') { document.querySelector('.sidebar')?.classList.toggle('open'); return; }
-    if (button.dataset.action === 'show-lesson') { document.querySelector('#lesson-editor')?.classList.remove('hidden'); return; }
+    if (button.dataset.action === 'show-lesson') {
+      const editor = document.querySelector('#lesson-editor');
+      editor?.classList.remove('hidden');
+      editor?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
     if (button.dataset.action === 'hide-lesson') { document.querySelector('#lesson-editor')?.classList.add('hidden'); return; }
     if (button.dataset.action === 'delete-lesson') return deleteLesson(button.dataset.id);
     if (button.dataset.action === 'copy-code') {
@@ -686,19 +834,31 @@ async function updateProgress(input) {
 
 async function submitLesson(form) {
   const values = Object.fromEntries(new FormData(form).entries());
+  const startIndex = Number(values.startPeriod);
+  const periodCount = Number(values.periodCount);
+  if (!Number.isInteger(startIndex) || !Number.isInteger(periodCount) ||
+      startIndex < 0 || periodCount < 1 || periodCount > 3 ||
+      startIndex + periodCount > schedulePeriods.length) {
+    notify('Выбранная продолжительность не помещается в учебный день.', 'error');
+    return;
+  }
+  const startPeriod = schedulePeriods[startIndex];
+  const endPeriod = schedulePeriods[startIndex + periodCount - 1];
   setBusy(true);
   try {
     await addDoc(groupCollection('lessons'), {
       subject: String(values.subject || '').trim(),
       weekday: Number(values.weekday),
       weekNumber: Number(values.weekNumber),
-      startsAt: values.startsAt,
-      endsAt: values.endsAt || '',
+      startsAt: startPeriod.start,
+      endsAt: endPeriod.end,
+      periodCount,
       room: String(values.room || '').trim(),
+      description: String(values.description || '').trim(),
       createdBy: state.user.uid,
       createdAt: serverTimestamp()
     });
-    notify('Пара добавлена.', 'success');
+    notify('Пара добавлена в расписание.', 'success');
     await loadWorkspace();
     renderWorkspace();
   } catch (error) {
