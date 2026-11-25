@@ -515,6 +515,23 @@
 }
 
 
+
+
+/* Monthly attendance report export */
+.attendance-report-toolbar{display:flex;align-items:center;justify-content:space-between;gap:18px;margin:0 0 18px;padding:17px 19px;border:1px solid var(--line);border-radius:14px;background:#fff}
+.attendance-report-toolbar>div:first-child{min-width:0}
+.attendance-report-toolbar>div:first-child strong{display:block;margin:2px 0 5px;font:700 15px Manrope,sans-serif;color:var(--ink)}
+.attendance-report-toolbar>div:first-child .muted{max-width:620px;margin:0;font-size:11px;line-height:1.5}
+.attendance-report-toolbar .eyebrow{margin-bottom:5px}
+.attendance-report-controls{display:flex;align-items:flex-end;gap:10px;flex-shrink:0}
+.attendance-report-controls label{display:flex;flex-direction:column;gap:5px;font-size:11px;font-weight:700;color:var(--ink)}
+.attendance-report-controls input{min-height:39px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink);font:inherit}
+.attendance-report-controls .btn{min-height:39px;white-space:nowrap}
+@media(max-width:760px){
+  .attendance-report-toolbar{align-items:stretch;flex-direction:column}
+  .attendance-report-controls{align-items:stretch;flex-direction:column}
+  .attendance-report-controls input,.attendance-report-controls .btn{width:100%}
+}
 /* Independent attendance controls for each part of a double lesson */
 .attendance-subparts{display:flex;flex-direction:column;gap:9px}
 .attendance-subpart.is-split{padding:11px 12px;border:1px solid #e7e5df;border-radius:11px;background:#faf9f7}
