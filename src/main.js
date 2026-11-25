@@ -606,7 +606,7 @@ function renderDeadlines() {
       '<div class="deadline-calendar-legend">' +
         '<span><i class="legend-dot complete"></i>Всё выполнено</span>' +
         '<span><i class="legend-dot pending"></i>Есть невыполненные</span>' +
-        '<span><i class="legend-dot empty"></i>Нет ДЗ</span>' +
+        '<span><i class="legend-dot no-deadlines"></i>Нет ДЗ</span>' +
       '</div>' +
     '</section>' +
     '<section class="deadline-selected-section">' +
