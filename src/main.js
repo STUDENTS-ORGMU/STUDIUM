@@ -342,10 +342,10 @@ function renderModeration() {
 }
 
 const schedulePeriods = [
-  { start: '08:30', end: '10:05', label: '1-я пара' },
-  { start: '10:30', end: '12:05', label: '2-я пара' },
-  { start: '13:00', end: '14:35', label: '3-я пара' },
-  { start: '15:00', end: '16:35', label: '4-я пара' }
+  { start: '08:30', end: '10:00', label: '1-я пара' },
+  { start: '10:30', end: '12:00', label: '2-я пара' },
+  { start: '13:00', end: '14:30', label: '3-я пара' },
+  { start: '15:00', end: '16:30', label: '4-я пара' }
 ];
 
 function timeToMinutes(value) {
@@ -476,7 +476,7 @@ function renderSchedule() {
       '<div class="schedule-form-grid">' +
       '<label>Учебная неделя<select name="weekNumber"><option value="1">Первая неделя</option><option value="2">Вторая неделя</option></select></label>' +
       '<label>День недели<select name="weekday"><option value="1">Понедельник</option><option value="2">Вторник</option><option value="3">Среда</option><option value="4">Четверг</option><option value="5">Пятница</option><option value="6">Суббота</option></select></label>' +
-      '<label>Начало<select name="startPeriod"><option value="0">1-я · 08:30–10:05</option><option value="1">2-я · 10:30–12:05</option><option value="2">3-я · 13:00–14:35</option><option value="3">4-я · 15:00–16:35</option></select></label>' +
+      '<label>Начало<select name="startPeriod"><option value="0">1-я · 08:30–10:00</option><option value="1">2-я · 10:30–12:00</option><option value="2">3-я · 13:00–14:30</option><option value="3">4-я · 15:00–16:30</option></select></label>' +
       '<label>Продолжительность<select name="periodCount"><option value="1">Одна пара</option><option value="2">Две пары подряд</option><option value="3">Три пары подряд</option></select></label>' +
       '</div>' +
       '<div class="schedule-form-grid">' +
