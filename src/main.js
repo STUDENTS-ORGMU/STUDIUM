@@ -1004,9 +1004,10 @@ function renderScheduleDay(weekNumber, weekday, todayInfo, tomorrowInfo) {
               '<input type="hidden" name="startPeriod" value="' + slot + '">' +
               '<label>Предмет<input name="subject" required maxlength="120" placeholder="Название предмета"></label>' +
               '<div class="schedule-inline-options">' +
+                '<label>Тип занятия<select name="lessonType"><option value="lecture">Лекция</option><option value="seminar">Семинар</option></select></label>' +
                 '<label>Длительность<select name="periodCount">' + durationOptions + '</select></label>' +
-                '<label>Аудитория<input name="room" maxlength="60" placeholder="Ауд."></label>' +
               '</div>' +
+              '<label>Аудитория<input name="room" maxlength="60" placeholder="Ауд."></label>' +
               '<div class="schedule-inline-actions"><button class="btn primary" type="submit">Сохранить</button><button class="btn ghost" type="button" data-action="cancel-lesson-cell">Отмена</button></div>' +
             '</form>' +
           '</div>'
@@ -2045,6 +2046,7 @@ async function submitLesson(form) {
   try {
     await addDoc(groupCollection('lessons'), {
       subject: String(values.subject || '').trim(),
+      lessonType: values.lessonType === 'seminar' ? 'seminar' : 'lecture',
       weekday,
       weekNumber,
       startsAt: startPeriod.start,
