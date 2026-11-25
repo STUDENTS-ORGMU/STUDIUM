@@ -2277,8 +2277,11 @@ function bindEvents() {
       state.attendanceDate = event.target.value;
       state.selectedAttendanceLessonId = null;
       state.selectedAttendancePartKey = null;
-      try { await loadWorkspace(); renderWorkspace(); }
-      catch (error) { notify(error.message, 'error'); }
+      try {
+        await loadWorkspace();
+        renderWorkspace();
+        subscribeToLiveHomework();
+      } catch (error) { notify(error.message, 'error'); }
     }
     if (event.target.id === 'group-switch') {
       try { await selectGroup(event.target.value); }
