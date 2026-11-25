@@ -368,12 +368,18 @@ async function submitAuth(form) {
       const fullName = String(data.get('full_name') || '').trim();
       const credential = await createUserWithEmailAndPassword(auth, email, password);
       await updateProfile(credential.user, { displayName: fullName });
-      await setDoc(doc(db, 'users', credential.user.uid), {
-        fullName,
-        email,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
+      const profileRef = doc(db, 'users', credential.user.uid);
+      const existingProfile = await getDoc(profileRef);
+      if (existingProfile.exists()) {
+        await updateDoc(profileRef, { fullName, updatedAt: serverTimestamp() });
+      } else {
+        await setDoc(profileRef, {
+          fullName,
+          email,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+      }
       state.profile = { fullName, email };
       await boot(credential.user);
     } else {
