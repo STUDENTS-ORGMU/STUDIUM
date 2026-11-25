@@ -52,7 +52,6 @@ async function readCollection(source, constraints = []) {
     rows = (data||[]).map(x=>({id:x.user_id,userId:x.user_id,displayName:x.display_name,role:x.role,joinedAt:x.joined_at,...x.data}));
   } else if (isRecord(p)) {
     let q = supabase.from('group_records').select('record_id,data,created_at').eq('group_id',p[1]).eq('collection_name',p[2]);
-    for (const c of constraints) if(c.type==='where' && c.op==='==') q=q.eq('data->>'+c.field,String(c.value));
     const { data, error } = await q; fail(error);
     rows=(data||[]).map(x=>({id:x.record_id,...x.data}));
   }
@@ -76,10 +75,14 @@ export async function getDocs(input) {
 async function writeOne(documentRef, data, mode='set', merge=false) {
   const p=parse(documentRef.path), id=p.at(-1), payload={...data};
   if(p[0]==='groups'&&p.length===2){
-    const {error}=await supabase.from('study_groups').upsert({id,name:payload.name||'Учебная группа',created_by:payload.createdBy||null,data:Object.fromEntries(Object.entries(payload).filter(([k])=>!['name','createdBy','createdAt','updatedAt'].includes(k)))},{onConflict:'id'}); fail(error); return;
+    const old = (merge || mode==='update') ? (await readOne(documentRef.path) || {}) : {};
+    const next = { ...old, ...payload };
+    const {error}=await supabase.from('study_groups').upsert({id,name:next.name||'Учебная группа',created_by:next.createdBy||null,data:Object.fromEntries(Object.entries(next).filter(([k])=>!['id','name','createdBy','createdAt','updatedAt'].includes(k)))},{onConflict:'id'}); fail(error); return;
   }
   if(p[0]==='groups'&&p[2]==='members'&&p.length===4){
-    const {error}=await supabase.from('group_members').upsert({group_id:p[1],user_id:p[3],role:payload.role||'student',display_name:payload.displayName||'',data:Object.fromEntries(Object.entries(payload).filter(([k])=>!['role','displayName','userId','joinedAt'].includes(k)))},{onConflict:'group_id,user_id'}); fail(error); return;
+    const old = (merge || mode==='update') ? (await readOne(documentRef.path) || {}) : {};
+    const next = { ...old, ...payload };
+    const {error}=await supabase.from('group_members').upsert({group_id:p[1],user_id:p[3],role:next.role||'student',display_name:next.displayName||'',data:Object.fromEntries(Object.entries(next).filter(([k])=>!['id','role','displayName','userId','joinedAt'].includes(k)))},{onConflict:'group_id,user_id'}); fail(error); return;
   }
   if(p[0]==='users'&&p.length===2){
     const {error}=await supabase.from('profiles').update({username:payload.username,full_name:payload.fullName,patronymic:payload.patronymic,updated_at:new Date().toISOString()}).eq('id',p[1]); fail(error); return;
