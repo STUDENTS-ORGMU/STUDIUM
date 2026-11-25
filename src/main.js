@@ -474,7 +474,7 @@ function taskCards(items) {
     const deleteButton = state.role === 'leader'
       ? '<button type="button" class="task-delete-button" data-action="delete-task" data-id="' + esc(task.id) + '">Удалить ДЗ</button>'
       : '';
-    return '<article class="task-card ' + (done ? 'done' : '') + '"><div class="task-copy"><small>' + esc(task.subject || 'Без предмета') + '</small><h3>' + esc(task.title) + '</h3><p>' + esc(task.description || '') + '</p><div class="meta"><span>Пара: ' + esc(pairLabel || dateLabel) + '</span></div></div><div class="task-card-actions"><label class="check"><input type="checkbox" data-progress="' + esc(task.id) + '" ' + (done ? 'checked' : '') + '> Выполнено</label>' + deleteButton + '</div></article>';
+    return '<article data-key="task-' + esc(task.id) + '" class="task-card ' + (done ? 'done' : '') + '"><div class="task-copy"><small>' + esc(task.subject || 'Без предмета') + '</small><h3>' + esc(task.title) + '</h3><p>' + esc(task.description || '') + '</p><div class="meta"><span>Пара: ' + esc(pairLabel || dateLabel) + '</span></div></div><div class="task-card-actions"><label class="check"><input type="checkbox" data-progress="' + esc(task.id) + '" ' + (done ? 'checked' : '') + '> Выполнено</label>' + deleteButton + '</div></article>';
   }).join('') + '</div>';
 }
 
@@ -803,7 +803,7 @@ function renderAttendanceRoster(lesson) {
       '<button type="button" class="attendance-mark ' + cls + (status === value ? ' active' : '') +
       '" data-official-status="' + value + '" data-student="' + esc(userId) +
       '" data-lesson="' + esc(lesson.id) + '" aria-pressed="' + (status === value) + '">' + label + '</button>';
-    return '<article class="attendance-person-row"><div class="attendance-person-info"><strong>' + esc(name) + '</strong>' + role +
+    return '<article data-key="attendance-person-' + esc(userId) + '" class="attendance-person-row"><div class="attendance-person-info"><strong>' + esc(name) + '</strong>' + role +
       '<small class="attendance-person-response' + responseClass + '">' + responseText + '</small>' + lateNote + '</div>' +
       '<div class="attendance-mark-buttons">' +
       mark('present', 'Был', 'mark-present') +
@@ -838,7 +838,7 @@ function renderStudentAttendance(lessons, date) {
       '</div>' : '';
   const cards = lessons.map((lesson,index) => {
     const response = responseMap.get(lesson.id) || '';
-    return '<article class="student-attendance-lesson"><div class="student-attendance-lesson-title"><div>' +
+    return '<article data-key="student-attendance-' + esc(lesson.id) + '" class="student-attendance-lesson"><div class="student-attendance-lesson-title"><div>' +
       '<small>' + (index + 1) + ' пара · ' + esc(lesson.startsAt || '') + (lesson.endsAt ? '–' + esc(lesson.endsAt) : '') + '</small>' +
       '<h2>' + esc(lesson.subject) + '</h2>' + (lesson.room ? '<p>' + esc(lesson.room) + '</p>' : '') +
       '</div>' + (response ? attendanceResponseLabel(response) : '') + '</div>' +
@@ -1382,6 +1382,7 @@ async function submitTask(form) {
       });
       notify('Предложение отправлено старосте.', 'success');
     }
+    form.reset();
     state.selectedScheduleLessonId = lesson.id;
     await loadWorkspace();
     renderWorkspace();
