@@ -460,11 +460,24 @@ function renderOverview() {
     ? '<small class="muted date-stat-detail">' + esc(nearestDeadline.subject || 'Домашнее задание') +
       (nearestDeadline.title ? ' · ' + esc(nearestDeadline.title) : '') + '</small>'
     : '';
+  const nextLesson = state.lessons
+    .map(lesson => ({ lesson, date: nextLessonDate(lesson) }))
+    .filter(item => item.date)
+    .sort((a,b) => a.date.localeCompare(b.date) ||
+      (timeToMinutes(a.lesson.startsAt) ?? 0) - (timeToMinutes(b.lesson.startsAt) ?? 0))[0];
+  const nextLessonDetail = nextLesson
+    ? '<small class="muted date-stat-detail">' + esc(nextLesson.lesson.subject || 'Занятие') +
+      (nextLesson.lesson.startsAt ? ' · ' + esc(nextLesson.lesson.startsAt) : '') + '</small>'
+    : '';
+  const studentLessonStat = state.role !== 'leader'
+    ? '<article><small>Ближайшая пара</small><strong class="date-stat">' +
+      esc(nextLesson ? dateText(nextLesson.date) : 'Нет пар в расписании') + '</strong>' + nextLessonDetail + '</article>'
+    : '';
   const moderationStat = state.role === 'leader'
     ? '<article><small>На модерации</small><strong>' + pending + '</strong></article>'
     : '';
   return heading('STUDIUM / ОБЗОР', 'Добро пожаловать', esc(displayFullName(state.profile)), '<button class="btn primary" data-tab="tasks">Открыть задания →</button>') +
-    '<div class="stats"><article><small>Заданий в группе</small><strong>' + state.tasks.length + '</strong></article><article><small>Выполнено тобой</small><strong>' + completed + '</strong></article><article><small>Ближайший дедлайн</small><strong class="date-stat">' + esc(deadlineDate ? dateText(deadlineDate) : 'Нет заданий') + '</strong>' + deadlineDetail + '</article>' + moderationStat + '</div>' +
+    '<div class="stats"><article><small>Заданий в группе</small><strong>' + state.tasks.length + '</strong></article><article><small>Выполнено тобой</small><strong>' + completed + '</strong></article><article><small>Ближайший дедлайн</small><strong class="date-stat">' + esc(deadlineDate ? dateText(deadlineDate) : 'Нет заданий') + '</strong>' + deadlineDetail + '</article>' + moderationStat + studentLessonStat + '</div>' +
     '<section class="section"><div class="section-title"><h2>Ближайшие задания</h2><button class="text-btn" data-tab="tasks">Все задания →</button></div>' + taskCards(state.tasks.slice(0,3)) + '</section>';
 }
 
