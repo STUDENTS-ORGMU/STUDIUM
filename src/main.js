@@ -1,16 +1,13 @@
 import './style.css';
 import { downloadAttendanceReport } from './attendance-report.js';
 import { supabase, supabaseConfigured } from './supabase.js';
-
-import { signUpWithUsername, signInWithUsername, signOutFromSupabase, getCurrentSupabaseProfile } from './supabase-auth.js';
-
+import { signUpWithUsername, signInWithUsername, signOutFromSupabase } from './supabase-auth.js';
 import {
-  addDoc,
-  collection,
-  import {
   db, addDoc, collection, doc, deleteDoc, getDoc, getDocs, onSnapshot,
   orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc, where, writeBatch
-} from './supabase-data.js';or('#app');
+} from './supabase-data.js';
+
+const root = document.querySelector('#app');
 const normalizeUsername = value => String(value ?? '').trim().toLowerCase();
 const validUsername = value => /^[a-z0-9][a-z0-9._-]{2,23}$/.test(value);
 
