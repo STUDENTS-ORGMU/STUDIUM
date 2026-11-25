@@ -1,6 +1,7 @@
 import './style.css';
 import { downloadAttendanceReport } from './attendance-report.js';
 import { supabase, supabaseConfigured } from './supabase.js';
+import { auth, db, firebaseConfigured } from './firebase.js';
 import { signUpWithUsername, signInWithUsername, signOutFromSupabase, getCurrentSupabaseProfile } from './supabase-auth.js';
 import {
   createUserWithEmailAndPassword,
@@ -2578,19 +2579,20 @@ async function doSignOut() {
 
 function start() {
   bindEvents();
-  if (!firebaseConfigured) return renderSetup();
-  onAuthStateChanged(auth, async user => {
-    try {
-      await boot(user);
-    } catch (error) {
-      console.error(error);
-      if (error.code === 'permission-denied') {
-        renderAuth('login', 'Вход выполнен, но Firestore отклонил доступ. ' + (error.message || 'Проверь опубликованные правила Firestore.'));
-      } else {
+  if (!supabaseConfigured) return renderSetup();
+  supabase.auth.onAuthStateChange((_event, user) => {
+    queueMicrotask(async () => {
+      try { await boot(user); }
+      catch (error) {
+        console.error(error);
         renderAuth('login', 'Не удалось загрузить данные: ' + (error.message || 'неизвестная ошибка'));
       }
-    }
+    });
   });
+  supabase.auth.getSession().then(({ data, error }) => {
+    if (error) throw error;
+    if (!data.session) renderAuth();
+  }).catch(error => renderAuth('login', error.message));
 }
 
 start();
