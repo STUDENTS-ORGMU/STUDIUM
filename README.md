@@ -1,146 +1,63 @@
 # STUDIUM
 
-STUDIUM — отдельная платформа для учебных групп. Проект создаётся с нуля на Vite, Vanilla JavaScript и Firebase.
+STUDIUM — платформа для учебных групп. Клиентская часть построена на Vite и Vanilla JavaScript; backend полностью работает на Supabase.
 
-## Возможности текущего MVP
+## Возможности
 
-- Регистрация с одним полем ФИО и логином; вход по логину/паролю без ввода пользователем email. Внутри Firebase логин преобразуется в технический email-идентификатор проекта.
-- Профиль пользователя в Cloud Firestore.
-- Создание нескольких учебных групп и вступление по коду приглашения.
-- Роли leader (староста) и student.
-- Публикация домашних заданий старостой с привязкой к паре из расписания и автоматической датой занятия; отдельного срока выполнения нет.
-- Предложения домашних заданий студентами с выбором пары из расписания и модерация старостой.
+- Регистрация и вход по логину и паролю (без ввода email пользователем).
+- Профили пользователей.
+- Создание учебных групп, роли старосты и студента, вступление по коду приглашения.
+- Домашние задания, предложения студентов и модерация старостой.
 - Личные отметки о выполнении заданий.
-- Недельная сетка расписания на две чередующиеся недели с временными слотами, выделением текущего дня, карточками предметов и домашними заданиями; староста может добавлять и удалять пары через отдельную форму.
-- Предварительные ответы студентов о посещении пары.
-- Отдельная модель официальной посещаемости, которую заполняет староста.
+- Расписание на две чередующиеся учебные недели.
+- Предварительные ответы о посещении и официальный журнал посещаемости.
+- Библиотека ссылок и файлов группы.
+- Экспорт отчёта по посещаемости.
 
 ## Стек
 
 - Vite + Vanilla JavaScript
-- Firebase Authentication
-- Cloud Firestore
-- Firestore Security Rules
-- Firebase modular Web SDK
-- Firestore-based chunked file storage (Spark-compatible)
-- PWA shell cache через Service Worker
+- Supabase Auth
+- Supabase Postgres с Row Level Security
+- Supabase Storage (private bucket `group-materials`)
+- Supabase JS SDK
+
+## Настройка Supabase
+
+Проект использует Supabase: https://supabase.com/dashboard
+
+1. Открой проект Supabase.
+2. В Authentication → Providers / Sign In настроь Email provider и отключи **Confirm email**. Пользователи вводят логин, а приложение формирует внутренний адрес `<login>@studium.invalid`.
+3. В SQL Editor последовательно выполни миграции из `supabase/migrations`:
+   - `202611260001_initial_schema.sql`
+   - `202611260002_secure_group_join_and_policies.sql`
+   - `202611260003_student_record_policies.sql`
+4. В Project Settings → API скопируй Project URL и publishable key.
+5. Создай локальный `.env` на основе `.env.example` и укажи:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_PUBLISHABLE_KEY`
+
+Миграции создают таблицы, RLS-политики и приватный Storage bucket `group-materials`. Не используй service_role key в браузере и не добавляй его в GitHub.
 
 ## Локальный запуск
 
 Требуется Node.js 20 или новее.
 
-    npm install
-    cp .env.example .env
-
-Заполни .env значениями Web App из Firebase Console:
-
-    VITE_FIREBASE_API_KEY=YOUR_FIREBASE_WEB_API_KEY
-    VITE_FIREBASE_AUTH_DOMAIN=YOUR_PROJECT_ID.firebaseapp.com
-    VITE_FIREBASE_PROJECT_ID=YOUR_PROJECT_ID
-    VITE_FIREBASE_MESSAGING_SENDER_ID=YOUR_MESSAGING_SENDER_ID
-    VITE_FIREBASE_APP_ID=YOUR_FIREBASE_APP_ID
-
-Запусти сервер разработки:
-
-    npm run dev
-
-## Создание Firebase-проекта
-
-Для STUDIUM рекомендуется отдельный Firebase project, не тот, который использует старая «Явка». Это отделит пользовательские данные, правила доступа, настройки Authentication и квоты.
-
-1. Открой Firebase Console: https://console.firebase.google.com/ и создай проект STUDIUM.
-2. В Project settings → General добавь Web App и скопируй Firebase config в .env.
-3. Открой Authentication → Sign-in method и включи Email/Password. Этот провайдер остаётся включённым, хотя в интерфейсе пользователь вводит логин, а не email.
-4. Открой Firestore Database и создай базу в Production mode.
-5. Опубликуй правила из firestore.rules через вкладку Firestore → Rules или командой firebase deploy --only firestore:rules.
-6. Опубликуй индексы из firestore.indexes.json командой firebase deploy --only firestore:indexes.
-6. Настрой Authentication → Settings → Authorized domains: добавь домен GitHub Pages и localhost для разработки.
-
-В корне есть firebase.json, поэтому Firebase CLI использует подготовленные файлы правил и индексов. Для CLI сначала выполни firebase login и firebase use --add, выбрав свой новый Firebase project.
+```bash
+npm install
+cp .env.example .env
+npm run dev
+```
 
 ## GitHub Pages
 
-Workflow в .github/workflows/deploy.yml собирает приложение и публикует его в GitHub Pages. В Settings → Secrets and variables → Actions → Variables добавь:
+Workflow `.github/workflows/deploy.yml` собирает и публикует приложение. В Settings → Secrets and variables → Actions → Variables добавь:
 
 | Variable | Значение |
 |---|---|
-| VITE_FIREBASE_API_KEY | Web API key |
-| VITE_FIREBASE_AUTH_DOMAIN | PROJECT_ID.firebaseapp.com |
-| VITE_FIREBASE_PROJECT_ID | ID проекта |
-| VITE_FIREBASE_MESSAGING_SENDER_ID | Messaging sender ID |
-| VITE_FIREBASE_APP_ID | App ID |
+| `VITE_SUPABASE_URL` | Supabase Project URL |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Supabase publishable/anon key |
 
-Firebase Web config предназначен для идентификации Web App и сам по себе не защищает базу. Доступ ограничивают Firestore Security Rules. Не публикуй service account private key или Admin SDK credentials в клиентском проекте.
+## Данные и безопасность
 
-## Вход по логину
-
-Пользователь указывает уникальный логин (3–24 символа: латинские буквы, цифры, точка, дефис или подчёркивание) и пароль. Для совместимости со стандартным Firebase Email/Password SDK приложение преобразует логин в детерминированный технический идентификатор вида `<login>@<auth-domain>` (для текущего проекта — домен Firebase Web App из конфигурации). Пользователь не вводит реальную почту, и такой адрес не предназначен для получения писем. Поэтому стандартное восстановление пароля по email и подтверждение почты недоступны; до запуска реальной группы нужно добавить альтернативный процесс восстановления доступа. Не отключай Email/Password в Firebase Console — это используемый приложением провайдер.
-
-## Модель Firestore
-
-    users/{uid}                            # fullName, patronymic, username
-      groups/{groupId}                 # список групп текущего пользователя
-
-    groups/{groupId}
-      members/{uid}                    # роль и имя участника
-      tasks/{taskId}                   # опубликованные ДЗ
-      taskSuggestions/{suggestionId}   # предложения ДЗ на модерации
-      taskProgress/{taskId_uid}        # личная отметка выполнения
-      lessons/{lessonId}               # расписание
-      attendanceResponses/{responseId} # предварительные ответы студентов
-      attendanceRecords/{recordId}     # официальный журнал старосты
-      materials/{materialId}           # материалы группы
-      lectures/{lectureId}             # лекции
-
-    inviteCodes/{code}                 # разрешение кода приглашения в группу
-
-Предложение домашнего задания и публикация связаны одной Firestore transaction: при одобрении одновременно создаётся документ задания и обновляется статус предложения. Security Rules проверяют эту атомарную связь через getAfter().
-
-## Роли и безопасность
-
-- Студент читает опубликованные задания своей группы, создаёт только собственные предложения и меняет только собственный прогресс.
-- Староста публикует задания, рассматривает предложения и управляет расписанием.
-- Предварительные ответы о посещаемости и официальный журнал хранятся в разных коллекциях.
-- Официальные отметки доступны только старосте.
-- Код приглашения можно получить по известному коду; перечислить все коды правила не разрешают.
-- Не используй правила вида allow read, write: if request.auth != null для всей базы.
-
-Правила из firestore.rules — начальная версия модели безопасности. Перед запуском на реальной группе протестируй роли двух аккаунтов и отказ в доступе к чужой группе через Firebase Emulator Suite / Rules Playground.
-
-## Начальная проверка
-
-1. Зарегистрируй первый аккаунт.
-2. Создай группу — создатель автоматически становится старостой.
-3. Скопируй код приглашения в разделе управления группой.
-4. Зарегистрируй второй тестовый аккаунт в другом браузере или режиме инкогнито.
-5. Войди вторым аккаунтом и присоединись по коду.
-6. От имени студента предложи домашнее задание.
-7. Вернись в аккаунт старосты и одобри предложение в разделе «Модерация».
-8. Убедись, что опубликованное задание появилось у студента, а отметка выполнения меняется только у текущего пользователя.
-
-## Что ещё предстоит
-
-Текущая версия — MVP-каркас, а не законченный production-релиз. Следующие этапы:
-
-1. Подключить отдельный Firebase project, опубликовать rules и indexes, проверить два аккаунта.
-2. Протестировать правила через Emulator Suite и исправить замечания до приглашения реальной группы.
-3. Добавить редактирование предложения старостой, комментарии при отклонении и журнал модерации.
-4. Развивать библиотеку материалов и подключить отдельную структуру лекций.
-5. Перенести полное расписание из study-journal.
-6. Перенести журнал явки из yavka, добавить экран официальных отметок, статистику и экспорт Excel.
-7. Добавить календарь дедлайнов, уведомления, realtime-подписки и сборки Android/Windows.
-
-
-Посещаемость: ответ студента автоматически создаёт начальную официальную отметку («Буду» → «Был», «Не буду» → «Неуваж.»). Ручные изменения старосты сохраняются и не перезаписываются последующими ответами студента.
-
-
-## Материалы группы на бесплатном Firebase Spark
-
-Раздел «Материалы» хранит метаданные, ссылки и содержимое файлов непосредственно в Cloud Firestore. Файлы разбиваются на небольшие Base64-части в подколлекции `groups/{groupId}/materialFiles/{materialId}/chunks`; Firebase Storage и тариф Blaze не требуются. Максимальный размер одного файла в интерфейсе — 20 МБ; староста может загружать и удалять файлы, участники группы — читать и скачивать.
-
-Для этой схемы опубликуй обновлённые правила Firestore: `firebase deploy --only firestore:rules`. Storage bucket создавать не нужно. Учти квоты Spark: 1 GiB данных, 50 000 чтений и 20 000 записей/удалений в сутки, 10 GiB исходящего трафика в месяц. Один документ Firestore ограничен 1 MiB, поэтому код разбивает файлы на части около 360 KiB. Это компромисс для небольших учебных материалов, а не замена специализированному файловому хранилищу.
-
-
-## Подготовка миграции на Supabase
-
-В репозитории подготовлен начальный Supabase-каркас: `src/supabase.js`, SQL-схема в `supabase/migrations/` и план переноса в `docs/FIREBASE_TO_SUPABASE_MIGRATION.md`. Приложение пока продолжает использовать Firebase — Supabase не является активным backend до завершения импорта и проверок. Для локальной настройки смотри `.env.example`; для GitHub Pages можно добавить Actions Variables `VITE_SUPABASE_URL` и `VITE_SUPABASE_PUBLISHABLE_KEY`. Используй только publishable key, никогда не добавляй secret/service_role key в клиентскую сборку.
+Firebase/Firestore не используются. Старые данные не переносятся. Групповые записи хранятся в `group_records` с раздельными коллекциями; членство и роль проверяются через RLS. Файлы хранятся в приватном Supabase Storage и выдаются через короткоживущие signed URLs.
