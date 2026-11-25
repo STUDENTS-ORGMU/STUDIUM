@@ -20,6 +20,9 @@ export async function signUpWithUsername({ username, password, fullName }) {
   if (!validUsername(normalized)) throw new Error('Логин должен содержать 3–24 символа: латинские буквы, цифры, точку, дефис или подчёркивание.');
   if (String(password ?? '').length < 8) throw new Error('Пароль должен содержать не менее 8 символов.');
   if (String(fullName ?? '').trim().length < 2) throw new Error('Укажи ФИО.');
+  const { data: occupiedEmail, error: lookupError } = await supabase.rpc('resolve_login_email', { p_username: normalized });
+  if (lookupError) throw lookupError;
+  if (occupiedEmail) throw new Error('Этот логин уже занят. Выбери другой.');
 
   const { data, error } = await supabase.auth.signUp({
     email: authEmailForUsername(normalized),
