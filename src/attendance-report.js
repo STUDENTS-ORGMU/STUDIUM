@@ -59,7 +59,7 @@ function attendanceEvents(records, lessonsById) {
     if (!['present', 'absent', 'excused', 'late', 'unmarked'].includes(record.status)) return;
     const date = normalizeDate(record.lessonDate);
     if (!date) return;
-    const key = record.lessonId + '|' + date;
+    const key = record.lessonId + '|' + date + '|' + record.studentId;
     if (!byLessonAndDate.has(key)) byLessonAndDate.set(key, []);
     byLessonAndDate.get(key).push({ ...record, normalizedDate: date, lesson });
   });
@@ -147,11 +147,9 @@ function buildAttendanceWorkbook(ExcelJS, { month, groupName, leaderName, member
     total: 0, excused: 0, absent: 0, byDate: new Map()
   }]));
 
-  const detailedRows = [];
   events.forEach(event => {
-    const member = memberById.get(event.studentId);
     const summary = totals.get(event.studentId);
-    if (!member || !summary) return;
+    if (!summary) return;
 
     summary.total += event.hours;
     if (event.reason === 'уважительно') summary.excused += event.hours;
@@ -161,17 +159,27 @@ function buildAttendanceWorkbook(ExcelJS, { month, groupName, leaderName, member
     const daySummary = summary.byDate.get(event.date);
     if (event.type === 'лекция') daySummary.lecture += event.hours;
     else daySummary.practice += event.hours;
-
-    detailedRows.push([
-      member.name,
-      dateLabel(event.date),
-      event.type,
-      event.subject,
-      event.hours,
-      event.pairs,
-      event.reason
-    ]);
   });
+
+  const detailedRows = events
+    .slice()
+    .sort((a, b) =>
+      (memberById.get(a.studentId)?.name || '').localeCompare(
+        memberById.get(b.studentId)?.name || '', 'ru', { sensitivity: 'base' }
+      ) || a.date.localeCompare(b.date) || a.subject.localeCompare(b.subject, 'ru')
+    )
+    .map(event => {
+      const member = memberById.get(event.studentId);
+      return [
+        member?.name || 'Участник',
+        dateLabel(event.date),
+        event.type,
+        event.subject,
+        event.hours,
+        event.pairs,
+        event.reason
+      ];
+    });
 
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'STUDIUM';
