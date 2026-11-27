@@ -469,7 +469,7 @@ function renderWorkspace() {
     navButton('schedule', 'schedule', 'Расписание и ДЗ')
   ].join('');
   const groupTabs = [
-    ...(leader ? [navButton('moderation', 'moderation', 'Модерация <b>' + state.suggestions.filter(item => item.status === 'pending').length + '</b>')] : []),
+    ...(leader ? [navButton('moderation', 'moderation', 'Одобрение ДЗ' + (state.suggestions.filter(item => item.status === 'pending').length ? '<b>' + state.suggestions.filter(item => item.status === 'pending').length + '</b>' : ''))] : []),
     navButton('attendance', 'attendance', 'Посещаемость'),
     navButton('library', 'library', 'Материалы'),
     navButton('makeups', 'makeups', 'Отработки'),
@@ -1016,7 +1016,7 @@ function renderModeration() {
   const pending = state.suggestions.filter(item => item.status === 'pending');
   const reviewed = state.suggestions.filter(item => item.status !== 'pending');
   const weekdayNames = ['','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'];
-  return heading('ПАНЕЛЬ СТАРОСТЫ', 'Модерация ДЗ', 'Проверь предложения студентов перед публикацией.') +
+  return heading('ПАНЕЛЬ СТАРОСТЫ', 'Одобрение ДЗ', 'Проверь предложения студентов перед публикацией.') +
     (pending.length ? '<div class="moderation">' + pending.map(item => {
       const editing = state.editingSuggestionId === item.id;
       if (editing && state.editingSuggestionFilesFor !== item.id) {
