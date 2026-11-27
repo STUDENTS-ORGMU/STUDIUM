@@ -216,9 +216,17 @@ function morphChildren(currentParent, freshParent) {
 }
 
 function frame(html) {
+  // Keep transient mobile drawer state across data-driven DOM refreshes.
+  // Realtime Supabase snapshots call renderWorkspace(), but must not close
+  // a menu the user has explicitly opened.
+  const sidebarWasOpen = root.querySelector('.sidebar')?.classList.contains('open') || false;
   const template = document.createElement('template');
   template.innerHTML = html + '<div id="toast" role="status" aria-live="polite"></div>';
   morphChildren(root, template.content);
+  if (sidebarWasOpen) {
+    root.querySelector('.sidebar')?.classList.add('open');
+    root.querySelector('.sidebar-backdrop')?.classList.add('visible');
+  }
 }
 
 function renderSetup() {
