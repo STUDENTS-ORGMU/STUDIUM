@@ -1196,3 +1196,6 @@
 .group-member-avatar-image { object-fit:cover; display:block; }
 
 .side-user-avatar-image { width:36px; height:36px; min-width:36px; border-radius:50%; object-fit:cover; display:block; }
+
+.group-member-avatar-upload { cursor:pointer; white-space:nowrap; }
+.group-member-avatar-upload input { display:none; }
