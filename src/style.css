@@ -921,3 +921,47 @@
 }
 .task-attachment-link:hover{border-color:var(--theme-accent,var(--ink,#222));background:var(--paper,#fff)}
 @media(max-width:680px){.task-attachments-fields{grid-template-columns:1fr}}
+
+
+/* Group make-up schedule */
+.makeups-page{display:flex;flex-direction:column;gap:18px}
+.makeups-hero{
+  display:flex;align-items:center;justify-content:space-between;gap:24px;
+  padding:24px 28px;overflow:hidden;
+  background:linear-gradient(110deg,var(--soft),var(--paper));
+  border:1px solid var(--line);
+}
+.makeups-hero h1{margin:5px 0 7px}
+.makeups-hero .muted{margin:0;max-width:560px}
+.makeups-illustration{
+  display:grid;place-items:center;flex:0 0 150px;width:150px;height:130px;
+  color:var(--theme-accent);background:var(--paper);border:1px solid var(--line);
+  border-radius:22px;
+}
+.makeups-illustration svg{width:132px;height:112px}
+.makeup-form{padding:22px;display:flex;flex-direction:column;gap:14px}
+.makeup-form h2{margin:0 0 3px;font-size:20px}
+.makeup-form .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.makeup-form label{display:flex;flex-direction:column;gap:7px;color:var(--muted);font-size:12px;font-weight:650}
+.makeup-form input{width:100%;min-width:0;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:var(--paper);color:var(--ink);font:inherit}
+.makeup-form input:focus{outline:2px solid color-mix(in srgb,var(--theme-accent) 20%,transparent);border-color:var(--theme-accent)}
+.makeup-form .btn{align-self:flex-start}
+.makeups-heading{display:flex;align-items:end;justify-content:space-between;gap:16px;margin-top:6px}
+.makeups-heading h2{margin:3px 0 0;font-size:22px}
+.makeup-list{display:grid;gap:10px}
+.makeup-card{display:flex;align-items:center;gap:16px;padding:16px}
+.makeup-date-art{flex:0 0 58px;width:58px;height:62px;display:flex;flex-direction:column;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:13px;background:var(--soft);color:var(--ink)}
+.makeup-date-art span{font-size:22px;line-height:1.1;font-weight:800}
+.makeup-date-art small{font-size:11px;color:var(--muted);text-transform:uppercase}
+.makeup-info{min-width:0;flex:1}
+.makeup-info .eyebrow{margin:0 0 5px}
+.makeup-info h3{margin:0 0 4px;font-size:16px}
+.makeup-info .muted{margin:0;font-size:13px}
+.makeup-delete{flex:0 0 auto}
+@media(max-width:680px){
+  .makeups-hero{padding:18px;align-items:flex-start}
+  .makeups-illustration{flex-basis:86px;width:86px;height:86px;border-radius:16px}
+  .makeups-illustration svg{width:78px;height:78px}
+  .makeup-form .form-grid{grid-template-columns:1fr}
+  .makeup-card{gap:11px;padding:12px}
+}
