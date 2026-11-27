@@ -985,3 +985,19 @@
   color:var(--ink);font:600 16px/1 inherit;cursor:pointer
 }
 .task-file-remove:hover{background:var(--theme-accent);color:var(--paper)}
+
+
+/* Moderation: edit a student's homework before publishing */
+.suggestion-edit-form{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;
+  margin-top:16px;padding:16px;border:1px solid var(--line);
+  border-radius:12px;background:var(--soft)
+}
+.suggestion-edit-form label{display:flex;flex-direction:column;gap:7px;color:var(--muted);font-size:12px;font-weight:650}
+.suggestion-edit-form input{
+  width:100%;min-width:0;padding:11px 12px;border:1px solid var(--line);
+  border-radius:9px;background:var(--paper);color:var(--ink);font:inherit
+}
+.suggestion-edit-form input:focus{outline:2px solid color-mix(in srgb,var(--theme-accent) 20%,transparent);border-color:var(--theme-accent)}
+.suggestion-edit-form .muted,.suggestion-edit-form .actions{grid-column:1/-1}
+@media(max-width:680px){.suggestion-edit-form{grid-template-columns:1fr}}
