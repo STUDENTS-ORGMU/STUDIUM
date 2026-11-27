@@ -1103,3 +1103,29 @@
   .suggestion-file-picker{min-height:96px;padding:13px}
   .suggestion-edit-files{grid-template-columns:1fr}
 }
+
+
+.suggestion-upload-status{
+  grid-column:1/-1;
+  display:flex;
+  align-items:center;
+  gap:9px;
+  margin:0;
+  padding:10px 12px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:var(--paper);
+  color:var(--ink);
+  font-size:13px;
+  font-weight:650;
+}
+.suggestion-upload-spinner{
+  width:16px;
+  height:16px;
+  flex:0 0 16px;
+  border:2px solid color-mix(in srgb,var(--theme-accent) 22%,transparent);
+  border-top-color:var(--theme-accent);
+  border-radius:50%;
+  animation:suggestion-upload-spin .75s linear infinite;
+}
+@keyframes suggestion-upload-spin{to{transform:rotate(360deg)}}
