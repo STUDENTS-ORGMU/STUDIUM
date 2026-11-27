@@ -50,6 +50,7 @@ const state = {
   group: null,
   role: null,
   tab: 'overview',
+  theme: localStorage.getItem('studium-theme') || 'mono',
   tasks: [],
   suggestions: [],
   lessons: [],
@@ -462,7 +463,8 @@ function renderWorkspace() {
     ...(leader ? [navButton('moderation', 'moderation', 'Модерация <b>' + state.suggestions.filter(item => item.status === 'pending').length + '</b>')] : []),
     navButton('attendance', 'attendance', 'Посещаемость'),
     navButton('library', 'library', 'Материалы'),
-    navButton('manage', 'manage', 'Группа')
+    navButton('manage', 'manage', 'Группа'),
+    navButton('appearance', 'manage', 'Оформление')
   ].join('');
 
   frame('<div class="layout"><aside class="sidebar"><a class="wordmark" href="#">STUDIUM</a><div class="group-box"><div class="group-box-heading"><small>ТВОЯ ГРУППА</small></div><strong>' + esc(state.group.name) + '</strong><div class="group-box-meta"><span>' + (leader ? 'Староста' : 'Студент') + '</span><span>' + state.groupMembers.length + ' участн.</span></div></div><nav><div class="nav-section"><small>ОСНОВНОЕ</small>' + mainTabs + '</div><div class="nav-section"><small>УПРАВЛЕНИЕ ГРУППОЙ</small>' + groupTabs + '</div></nav><div class="side-user"><button type="button" class="side-user-profile" data-tab="profile"><span class="avatar">' + esc(name.slice(0,1).toUpperCase()) + '</span><span class="side-user-copy"><strong>' + esc(name) + '</strong><small>' + esc(state.profile?.username ? '@' + state.profile.username : '') + '</small><em>Мой профиль →</em></span></button><button class="btn ghost" data-action="logout">Выйти</button></div></aside><main class="main"><header class="mobile-head"><button class="btn ghost" data-action="menu">☰</button><a class="wordmark" href="#">STUDIUM</a><span class="role">' + (leader ? 'Староста' : 'Студент') + '</span></header><div class="content">' + renderCurrentTab() + '</div></main></div>');
@@ -661,6 +663,7 @@ async function deleteGroupMaterial(materialId) {
 }
 
 function renderCurrentTab() {
+  if (state.tab === 'appearance') return renderAppearance();
   if (state.tab === 'profile') return renderProfile();
   if (state.tab === 'deadlines') return renderDeadlines();
   if (state.tab === 'tasks' || state.tab === 'schedule') return renderSchedule();
@@ -669,6 +672,35 @@ function renderCurrentTab() {
   if (state.tab === 'library') return renderLibrary();
   if (state.tab === 'manage') return renderManage();
   return renderOverview();
+}
+
+const themeOptions = [
+  { id: 'mono', name: 'Чёрно-белая классика', note: 'Чистый минимализм', colors: ['#FFFFFF','#EAEAEA','#171717','#B8B8B8'] },
+  { id: 'bluegray', name: 'Холодный графит', note: 'Сдержанный технологичный стиль', colors: ['#F7F8F9','#DCE3E8','#252A2E','#AAB5BE'] },
+  { id: 'beige', name: 'Тёплый бежевый', note: 'Мягкий и элегантный', colors: ['#FAF9F6','#EAE4DA','#252321','#B9AD9D'] },
+  { id: 'olive', name: 'Оливковый камень', note: 'Спокойный академичный стиль', colors: ['#F8F9F6','#DFE2D9','#252923','#A9B09F'] },
+  { id: 'slate', name: 'Сланец', note: 'Холодные стальные оттенки', colors: ['#F5F6F7','#DCE0E4','#29323A','#929DA7'] },
+  { id: 'sand', name: 'Песчаник', note: 'Светлый природный оттенок', colors: ['#FBF8F2','#E9DDC9','#302A22','#B9A88E'] },
+  { id: 'forest', name: 'Тёмный лес', note: 'Глубокий зелёно-серый акцент', colors: ['#F5F7F5','#DCE5DE','#25342B','#91A497'] },
+  { id: 'lavender', name: 'Дымчатая лаванда', note: 'Мягкий холодный оттенок', colors: ['#F8F7FA','#E5E0EA','#302B36','#A69BAD'] }
+];
+
+function applyTheme(themeId) {
+  const theme = themeOptions.find(item => item.id === themeId) || themeOptions[0];
+  state.theme = theme.id;
+  document.documentElement.dataset.theme = theme.id;
+  localStorage.setItem('studium-theme', theme.id);
+}
+
+function renderAppearance() {
+  return heading('ПЕРСОНАЛИЗАЦИЯ', 'Оформление', 'Выбери цветовую тему STUDIUM. Она сохранится на этом устройстве.') +
+    '<section class="theme-settings-grid">' +
+    themeOptions.map(theme => '<button type="button" class="theme-option' + (state.theme === theme.id ? ' active' : '') + '" data-theme-choice="' + theme.id + '" aria-pressed="' + (state.theme === theme.id) + '">' +
+      '<span class="theme-swatches">' + theme.colors.map(color => '<i style="background:' + color + '"></i>').join('') + '</span>' +
+      '<span class="theme-option-copy"><strong>' + theme.name + '</strong><small>' + theme.note + '</small></span>' +
+      '<span class="theme-check">' + (state.theme === theme.id ? '✓' : '') + '</span>' +
+    '</button>').join('') +
+    '</section><p class="muted theme-footnote">Тема меняет фон, карточки расписания, кнопки и акцентные элементы. Выбор сохраняется только на этом устройстве.</p>';
 }
 
 function renderProfile() {
@@ -2157,6 +2189,7 @@ function bindEvents() {
     if (!button) return;
     if (state.busy && !button.dataset.tab && button.dataset.action !== 'menu') return;
     if (button.dataset.mode) return renderAuth(button.dataset.mode);
+    if (button.dataset.themeChoice) { applyTheme(button.dataset.themeChoice); renderWorkspace(); return; }
     if (button.dataset.tab) { state.tab = button.dataset.tab; return renderWorkspace(); }
     if (button.dataset.action === 'logout') return doSignOut();
     if (button.dataset.action === 'menu') { document.querySelector('.sidebar')?.classList.toggle('open'); return; }
@@ -2335,6 +2368,7 @@ async function doSignOut() {
 }
 
 function start() {
+  applyTheme(state.theme);
   bindEvents();
   if (!supabaseConfigured) return renderSetup();
   supabase.auth.onAuthStateChange((_event, session) => {
