@@ -881,28 +881,29 @@
 }
 
 
-/* Compact, understated schedule homework action */
+/* Compact schedule homework action — override global button sizing */
 .schedule-homework-action{
-  display:inline-flex;align-items:center;justify-content:center;gap:6px;
-  align-self:flex-start;width:auto;min-height:28px;margin-top:auto;
-  padding:5px 10px;border:1px solid var(--line,#dedbd4);
-  border-radius:7px;background:transparent;color:var(--muted,#666);
-  font:600 10px/1.2 inherit;letter-spacing:.01em;cursor:pointer;
-  box-shadow:none;transition:background .15s,border-color .15s,color .15s,transform .15s;
+  display:inline-flex!important;align-items:center;justify-content:center;gap:5px;
+  align-self:flex-start;width:auto!important;min-width:0!important;max-width:max-content;
+  min-height:26px!important;height:26px!important;margin-top:auto;
+  padding:4px 9px!important;border:1px solid var(--line,#dedbd4)!important;
+  border-radius:7px!important;background:transparent!important;
+  color:var(--muted,#666)!important;font-family:inherit!important;
+  font-size:11px!important;font-weight:600!important;line-height:1!important;
+  letter-spacing:0!important;box-shadow:none!important;cursor:pointer;
+  transition:background .15s,border-color .15s,color .15s;
 }
 .schedule-homework-action::before{
-  content:"＋";font-size:13px;line-height:1;font-weight:500;
+  content:"＋";font-family:inherit;font-size:12px;font-weight:500;line-height:1;
 }
 .schedule-homework-action:hover{
-  background:var(--soft,#f2eee7);border-color:var(--theme-accent,var(--ink,#333));
-  color:var(--ink,#222);transform:translateY(-1px);
-}
-.schedule-homework-action:focus-visible{
-  outline:2px solid var(--theme-accent,var(--ink,#222));outline-offset:2px;
+  background:var(--soft,#f2eee7)!important;
+  border-color:var(--theme-accent,var(--ink,#333))!important;
+  color:var(--ink,#222)!important;
 }
 :root[data-theme] .schedule-homework-action{
-  color:var(--muted);background:var(--paper);border-color:var(--line);
+  color:var(--muted)!important;background:transparent!important;border-color:var(--line)!important;
 }
 :root[data-theme] .schedule-homework-action:hover{
-  color:var(--ink);background:var(--soft);border-color:var(--theme-accent);
+  color:var(--ink)!important;background:var(--soft)!important;border-color:var(--theme-accent)!important;
 }
