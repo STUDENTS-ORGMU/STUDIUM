@@ -1005,6 +1005,12 @@ function scheduleLessonCard(lesson, startIndex, span) {
     '<span>' + period.start + '–' + period.end + (span > 1 ? ' · ' + period.label : '') + '</span>'
   ).join('');
   const selected = state.selectedScheduleLessonId === lesson.id;
+  const homework = state.tasks.find(task => task.lessonId === lesson.id);
+  const homeworkMarkup = homework
+    ? '<div class="schedule-homework-preview"><span>ДЗ</span><strong>' + esc(homework.title || 'Задание опубликовано') + '</strong>' +
+      (homework.description ? '<small>' + esc(homework.description) + '</small>' : '') + '</div>'
+    : '<button type="button" class="schedule-homework-action" data-action="open-lesson-homework" data-id="' + esc(lesson.id) + '">' +
+      (state.role === 'leader' ? '＋ Добавить ДЗ' : '＋ Предложить ДЗ') + '</button>';
   return '<article class="schedule-lesson ' + (lesson.lessonType === 'lecture' ? 'lecture-lesson' : 'seminar-lesson') + (span > 1 ? ' double-period' : '') + (selected ? ' selected-lesson' : '') +
     '" style="grid-row:span ' + span + '" data-schedule-lesson data-id="' + esc(lesson.id) +
     '" role="button" tabindex="0" aria-pressed="' + selected + '" aria-label="Показать задания: ' + esc(lesson.subject) + '">' +
@@ -1013,7 +1019,7 @@ function scheduleLessonCard(lesson, startIndex, span) {
      '<span class="schedule-lesson-type-label">' + (lesson.lessonType === 'seminar' ? 'Семинар' : 'Лекция') + '</span>' +
     (lesson.room ? '<small class="schedule-room">' + esc(lesson.room) + '</small>' : '') +
     (lesson.description ? '<p class="schedule-description">' + esc(lesson.description) + '</p>' : '') +
-    '<small class="schedule-task-hint">' + (selected ? 'Задания выбраны ниже' : 'Нажми, чтобы увидеть ДЗ') + '</small>' +
+    homeworkMarkup +
     (state.role === 'leader' ? '<button type="button" class="lesson-delete" title="Удалить пару" aria-label="Удалить пару" data-action="delete-lesson" data-id="' + esc(lesson.id) + '">×</button>' : '') +
     '</article>';
 }
@@ -2180,6 +2186,13 @@ function bindEvents() {
     if (button.dataset.tab) { state.tab = button.dataset.tab; return renderWorkspace(); }
     if (button.dataset.action === 'logout') return doSignOut();
     if (button.dataset.action === 'menu') { document.querySelector('.sidebar')?.classList.toggle('open'); return; }
+
+    if (button.dataset.action === 'open-lesson-homework') {
+      state.selectedScheduleLessonId = button.dataset.id;
+      renderWorkspace();
+      root.querySelector('#homework-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
 
     if (button.dataset.scheduleLesson !== undefined) {
       state.selectedScheduleLessonId = button.dataset.id;
