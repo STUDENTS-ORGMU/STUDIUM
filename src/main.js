@@ -1850,6 +1850,7 @@ function renderManage() {
       '<div class="group-member-name"><strong>' + esc(name) + (isCurrent ? ' <span class="group-you-label">Это вы</span>' : '') + '</strong>' +
       '<small>' + (isLeader ? 'Староста' : 'Студент') + '</small></div>' +
       (isLeader ? '<span class="group-member-role">Староста</span>' : '<span class="group-member-role student">Студент</span>') +
+      (leader && !isLeader && !isCurrent ? '<button type="button" class="btn ghost group-member-remove" data-action="remove-group-member" data-user-id="' + esc(member.id) + '" data-user-name="' + esc(name) + '" aria-label="Удалить ' + esc(name) + ' из группы">Удалить</button>' : '') +
       '</article>';
   }).join('');
 
@@ -1864,6 +1865,28 @@ function renderManage() {
       (rows ? '<div class="group-members-list">' + rows + '</div>' : empty('Пока никого нет', 'Участники появятся в этом списке после присоединения к группе.')) +
     '</section>' +
     (leader ? '<section class="panel group-cycle-panel"><h2>Учебный цикл</h2><p class="muted">Укажи понедельник, с которого начинается первая учебная неделя.</p><form id="cycle-form" class="form"><label>Начало первой учебной недели<input name="studyCycleStart" type="date" value="' + esc(state.group.studyCycleStart || '') + '" required></label><button class="btn secondary">Сохранить учебный цикл</button></form></section>' : '');
+}
+
+
+async function removeGroupMember(userId, memberName) {
+  if (state.role !== 'leader' || !userId || userId === state.user.uid) return;
+  const confirmed = window.confirm('Удалить ' + (memberName || 'студента') + ' из группы? Он потеряет доступ к материалам, заданиям и расписанию этой группы.');
+  if (!confirmed) return;
+  setBusy(true);
+  try {
+    const { error } = await supabase.from('group_members')
+      .delete()
+      .eq('group_id', state.group.id)
+      .eq('user_id', userId);
+    if (error) throw error;
+    await loadWorkspace();
+    renderWorkspace();
+    notify('Студент удалён из группы.', 'success');
+  } catch (error) {
+    notify(error.message || 'Не удалось удалить студента из группы.', 'error');
+  } finally {
+    setBusy(false);
+  }
 }
 
 async function submitAuth(form) {
@@ -2411,6 +2434,7 @@ function bindEvents() {
     if (button.dataset.action === 'download-material') return openGroupMaterial(button.dataset.id);
     if (button.dataset.action === 'delete-material') return deleteGroupMaterial(button.dataset.id);
     if (button.dataset.action === 'delete-makeup') return deleteMakeup(button.dataset.id);
+    if (button.dataset.action === 'remove-group-member') return removeGroupMember(button.dataset.userId, button.dataset.userName);
     if (button.dataset.action === 'export-attendance-report') {
       const month = root.querySelector('#attendance-report-month')?.value || '';
       return exportAttendanceReport(month);
