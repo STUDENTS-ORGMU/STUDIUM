@@ -2037,7 +2037,7 @@ async function updateProgress(input) {
     } else {
       card?.classList.toggle('done', input.checked);
     }
-    notify('Личный прогресс сохранён.', 'success');
+    notify(input.checked ? 'Личный прогресс сохранён.' : 'Личный регресс сохранён.', 'success');
   } catch (error) {
     input.checked = Boolean(current);
     if (state.tab === 'deadlines') {
