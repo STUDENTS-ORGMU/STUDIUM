@@ -879,3 +879,30 @@
 :root[data-theme] .schedule-homework-action:hover{
   border-color:var(--theme-accent);background:var(--paper);
 }
+
+
+/* Compact, understated schedule homework action */
+.schedule-homework-action{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  align-self:flex-start;width:auto;min-height:28px;margin-top:auto;
+  padding:5px 10px;border:1px solid var(--line,#dedbd4);
+  border-radius:7px;background:transparent;color:var(--muted,#666);
+  font:600 10px/1.2 inherit;letter-spacing:.01em;cursor:pointer;
+  box-shadow:none;transition:background .15s,border-color .15s,color .15s,transform .15s;
+}
+.schedule-homework-action::before{
+  content:"＋";font-size:13px;line-height:1;font-weight:500;
+}
+.schedule-homework-action:hover{
+  background:var(--soft,#f2eee7);border-color:var(--theme-accent,var(--ink,#333));
+  color:var(--ink,#222);transform:translateY(-1px);
+}
+.schedule-homework-action:focus-visible{
+  outline:2px solid var(--theme-accent,var(--ink,#222));outline-offset:2px;
+}
+:root[data-theme] .schedule-homework-action{
+  color:var(--muted);background:var(--paper);border-color:var(--line);
+}
+:root[data-theme] .schedule-homework-action:hover{
+  color:var(--ink);background:var(--soft);border-color:var(--theme-accent);
+}
