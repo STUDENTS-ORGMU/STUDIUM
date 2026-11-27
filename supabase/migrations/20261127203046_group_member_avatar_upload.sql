@@ -67,3 +67,6 @@ using (
     )
   )
 );
+
+-- Permit updating only the avatar column; RLS limits leaders to their own groups.
+grant update (avatar_path) on table public.group_members to authenticated;
