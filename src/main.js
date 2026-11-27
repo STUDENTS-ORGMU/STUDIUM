@@ -1812,7 +1812,12 @@ async function deleteTask(taskId) {
 }
 
 function renderManage() {
-  const members = state.groupMembers.slice().sort((a,b) =>
+  const allMembers = state.groupMembers.slice();
+  const specialMemberName = 'zhабов жаб жабович';
+  const isSpecialMember = member => String(member.displayName || member.fullName || member.username || '')
+    .trim().replace(/\s+/g, ' ').toLocaleLowerCase('ru') === specialMemberName;
+  const specialMember = allMembers.find(isSpecialMember);
+  const members = allMembers.filter(member => !isSpecialMember(member)).sort((a,b) =>
     String(a.displayName || a.username || '').localeCompare(
       String(b.displayName || b.username || ''), 'ru', { sensitivity: 'base' }
     )
@@ -1833,19 +1838,22 @@ function renderManage() {
       '</section>'
     : '<p class="muted group-student-note">Ты состоишь в этой учебной группе. Список участников доступен всем членам группы.</p>';
 
-  const rows = members.map((member,index) => {
+  const renderMemberRow = (member, special = false) => {
     const name = member.displayName || member.fullName || member.username || 'Участник';
     const isLeader = member.role === 'leader';
     const isCurrent = member.id === state.user.uid;
     const initials = name.trim().split(/\s+/).slice(0,2).map(part => part[0] || '').join('').toUpperCase();
-    return '<article class="group-member-row">' +
+    const memberLabel = special ? 'Бегущий по болоту' : (isLeader ? 'Староста' : 'Студент');
+    return '<article class="group-member-row' + (special ? ' group-member-row-special' : '') + '">' +
       '<span class="group-member-avatar">' + esc(initials || 'У') + '</span>' +
       '<div class="group-member-name"><strong>' + esc(name) + (isCurrent ? ' <span class="group-you-label">Это вы</span>' : '') + '</strong>' +
-      '<small>' + (isLeader ? 'Староста' : 'Студент') + '</small></div>' +
-      (isLeader ? '<span class="group-member-role">Староста</span>' : '<span class="group-member-role student">Студент</span>') +
+      '<small>' + memberLabel + '</small></div>' +
+      (isLeader ? '<span class="group-member-role">Староста</span>' : '<span class="group-member-role student' + (special ? ' swamp-runner' : '') + '">' + memberLabel + '</span>') +
       (leader && !isLeader && !isCurrent ? '<button type="button" class="btn ghost group-member-remove" data-action="remove-group-member" data-user-id="' + esc(member.id) + '" data-user-name="' + esc(name) + '" aria-label="Удалить ' + esc(name) + ' из группы">Удалить</button>' : '') +
       '</article>';
-  }).join('');
+  };
+  const rows = members.map(member => renderMemberRow(member)).join('');
+  const specialRow = specialMember ? renderMemberRow(specialMember, true) : '';
 
   return heading('ПРОСТРАНСТВО ГРУППЫ', 'Наша группа', 'Информация об учебной группе и её участниках.') +
     '<div class="group-overview">' +
@@ -1855,7 +1863,8 @@ function renderManage() {
       invite + switcher +
     '</div>' +
     '<section class="group-members-section"><div class="group-members-heading"><div><p class="eyebrow">СОСТАВ ГРУППЫ</p><h2>Все участники</h2></div><span class="group-members-count">' + members.length + '</span></div>' +
-      (rows ? '<div class="group-members-list">' + rows + '</div>' : empty('Пока никого нет', 'Участники появятся в этом списке после присоединения к группе.')) +
+      (rows ? '<div class="group-members-list">' + rows + '</div>' : (!specialRow ? empty('Пока никого нет', 'Участники появятся в этом списке после присоединения к группе.') : '')) +
+      (specialRow ? '<div class="group-member-special-section"><p class="eyebrow">ОСОБЫЙ СТАТУС</p><div class="group-members-list">' + specialRow + '</div></div>' : '') +
     '</section>' +
     (leader ? '<section class="panel group-cycle-panel"><h2>Учебный цикл</h2><p class="muted">Укажи понедельник, с которого начинается первая учебная неделя.</p><form id="cycle-form" class="form"><label>Начало первой учебной недели<input name="studyCycleStart" type="date" value="' + esc(state.group.studyCycleStart || '') + '" required></label><button class="btn secondary">Сохранить учебный цикл</button></form></section>' : '');
 }
