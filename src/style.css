@@ -644,3 +644,67 @@
 .theme-option:not(.active) .theme-check{background:var(--soft);color:transparent}
 .theme-footnote{font-size:12px;line-height:1.6;margin-top:17px}
 @media(max-width:720px){.theme-settings-grid{grid-template-columns:1fr}.theme-option{padding:13px}.theme-option.active{padding:12px}}
+
+
+/* Theme-aware Today / Tomorrow markers */
+:root[data-theme] .today-badge{
+  background:var(--theme-accent);
+  color:#fff;
+}
+:root[data-theme] .tomorrow-badge{
+  background:var(--soft);
+  color:var(--ink);
+  border:1px solid var(--line);
+}
+:root[data-theme] .schedule-summary .today-highlight{
+  background:var(--theme-lecture);
+  border-color:var(--theme-accent);
+  color:var(--ink);
+}
+:root[data-theme] .schedule-summary .tomorrow-highlight{
+  background:var(--soft);
+  border-color:var(--line);
+  color:var(--ink);
+}
+:root[data-theme] .schedule-day.is-today{
+  background:color-mix(in srgb,var(--theme-lecture) 38%,var(--paper));
+  border-color:var(--theme-accent);
+}
+:root[data-theme] .schedule-day.is-tomorrow{
+  background:var(--soft);
+  border-color:var(--line);
+}
+
+/* Keep the desktop sidebar fully visible without a scrollbar */
+@media(min-width:681px){
+  .sidebar{
+    height:100vh;
+    min-height:0;
+    overflow:hidden;
+    padding:clamp(14px,2.6vh,24px) 14px;
+  }
+  .sidebar>.wordmark{padding:0 10px clamp(15px,2.8vh,25px)}
+  .group-box{margin:0 4px clamp(13px,2.5vh,22px);padding:12px;gap:7px}
+  .sidebar nav{flex:1;min-height:0;gap:clamp(9px,1.7vh,16px);overflow:hidden}
+  .nav-section{gap:2px}
+  .nav-section>small{padding:0 10px 4px;font-size:8px}
+  .sidebar nav button{min-height:clamp(33px,5.1vh,40px);padding:7px 10px;gap:9px}
+  .sidebar nav button .nav-label{font-size:11px}
+  .sidebar-icon{width:16px;height:16px;flex-basis:16px}
+  .side-user{padding-top:clamp(9px,1.8vh,14px);gap:6px}
+  .side-user-profile{gap:8px;padding:2px}
+  .side-user-profile .avatar{flex-basis:30px;width:30px;height:30px}
+  .side-user-copy{gap:2px}
+  .side-user-copy strong{font-size:10px}
+  .side-user-copy small,.side-user-copy em{font-size:9px}
+  .side-user .btn{padding:8px 12px;margin-top:1px}
+}
+@media(min-width:681px) and (max-height:650px){
+  .sidebar{padding-top:10px;padding-bottom:10px}
+  .sidebar>.wordmark{padding-bottom:12px}
+  .group-box{margin-bottom:10px;padding:9px}
+  .sidebar nav{gap:7px}
+  .sidebar nav button{min-height:30px;padding:5px 9px}
+  .nav-section>small{padding-bottom:2px}
+  .side-user{padding-top:7px}
+}
