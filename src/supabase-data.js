@@ -28,7 +28,7 @@ async function readOne(path) {
   }
   if (p[0] === 'groups' && p[2] === 'members' && p.length === 4) {
     const { data, error } = await supabase.from('group_members').select('*').eq('group_id',p[1]).eq('user_id',p[3]).maybeSingle(); fail(error);
-    return data ? { userId:data.user_id, displayName:data.display_name, role:data.role, joinedAt:data.joined_at, ...data.data } : null;
+    return data ? { userId:data.user_id, displayName:data.display_name, role:data.role, joinedAt:data.joined_at, ...data.data, avatarPath:data.avatar_path || data.data?.avatarPath || null } : null;
   }
   if (p[0] === 'users' && p.length === 2) {
     const { data, error } = await supabase.from('profiles').select('*').eq('id',p[1]).maybeSingle(); fail(error);
@@ -49,7 +49,7 @@ async function readCollection(source, constraints = []) {
   let rows = [];
   if (p[0] === 'groups' && p.length === 3 && p[2] === 'members') {
     const { data, error } = await supabase.from('group_members').select('*').eq('group_id',p[1]); fail(error);
-    rows = (data||[]).map(x=>({id:x.user_id,userId:x.user_id,displayName:x.display_name,role:x.role,joinedAt:x.joined_at,...x.data}));
+    rows = (data||[]).map(x=>({id:x.user_id,userId:x.user_id,displayName:x.display_name,role:x.role,joinedAt:x.joined_at,...x.data,avatarPath:x.avatar_path || x.data?.avatarPath || null}));
   } else if (isRecord(p)) {
     let q = supabase.from('group_records').select('record_id,data,created_at').eq('group_id',p[1]).eq('collection_name',p[2]);
     const { data, error } = await q; fail(error);
@@ -82,7 +82,7 @@ async function writeOne(documentRef, data, mode='set', merge=false) {
   if(p[0]==='groups'&&p[2]==='members'&&p.length===4){
     const old = (merge || mode==='update') ? (await readOne(documentRef.path) || {}) : {};
     const next = { ...old, ...payload };
-    const {error}=await supabase.from('group_members').upsert({group_id:p[1],user_id:p[3],role:next.role||'student',display_name:next.displayName||'',data:Object.fromEntries(Object.entries(next).filter(([k])=>!['id','role','displayName','userId','joinedAt'].includes(k)))},{onConflict:'group_id,user_id'}); fail(error); return;
+    const {error}=await supabase.from('group_members').upsert({group_id:p[1],user_id:p[3],role:next.role||'student',display_name:next.displayName||'',avatar_path:next.avatarPath ?? old.avatarPath ?? null,data:Object.fromEntries(Object.entries(next).filter(([k])=>!['id','role','displayName','userId','joinedAt','avatarPath'].includes(k)))},{onConflict:'group_id,user_id'}); fail(error); return;
   }
   if(p[0]==='users'&&p.length===2){
     const {error}=await supabase.from('profiles').update({username:payload.username,full_name:payload.fullName,patronymic:payload.patronymic,updated_at:new Date().toISOString()}).eq('id',p[1]); fail(error); return;
