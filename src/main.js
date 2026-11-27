@@ -644,7 +644,6 @@ async function deleteGroupMaterial(materialId) {
   if (state.role !== 'leader') return notify('Удалять материалы может только староста.', 'error');
   const item = state.materials.find(material => material.id === materialId);
   if (!item) return;
-  if (!window.confirm('Удалить материал «' + item.title + '»?')) return;
   setBusy(true);
   try {
     if (item.fileStorage === 'supabase-storage' && item.storagePath) {
@@ -1618,8 +1617,6 @@ async function markAllPresent(lessonId, partKey = null) {
     notify('В группе пока нет участников.');
     return;
   }
-  const partLabel = partKey ? ' на выбранную часть пары' : ' на эту пару';
-  if (!window.confirm('Поставить отметку «Был» всем ' + members.length + ' участникам группы' + partLabel + '? Текущие отметки будут заменены.')) return;
 
   setBusy(true);
   try {
@@ -1705,7 +1702,6 @@ async function deleteTask(taskId) {
     notify('Задание не найдено или уже удалено.', 'error');
     return;
   }
-  if (!window.confirm('Удалить ДЗ «' + task.title + '»? Личные отметки выполнения этого задания тоже будут удалены.')) return;
 
   setBusy(true);
   try {
@@ -2142,11 +2138,6 @@ async function deleteLesson(lessonId) {
     notify('Пара уже отсутствует в расписании.', 'error');
     return;
   }
-  const label = [lesson.subject, lesson.startsAt].filter(Boolean).join(' · ');
-  const confirmed = window.confirm(
-    'Удалить пару «' + label + '»?\n\nСвязанные предварительные ответы и официальные отметки посещаемости также будут удалены.'
-  );
-  if (!confirmed) return;
 
   setBusy(true);
   try {
