@@ -60,6 +60,7 @@ const state = {
   materials: [],
   taskFiles: [],
   editingSuggestionId: null,
+  editingSuggestionFiles: { existing: [], added: [] },
   makeups: [],
   groupMembers: [],
   selectedAttendanceLessonId: null,
@@ -1018,8 +1019,14 @@ function renderModeration() {
   return heading('ПАНЕЛЬ СТАРОСТЫ', 'Модерация ДЗ', 'Проверь предложения студентов перед публикацией.') +
     (pending.length ? '<div class="moderation">' + pending.map(item => {
       const editing = state.editingSuggestionId === item.id;
+      if (editing && state.editingSuggestionFilesFor !== item.id) {
+        state.editingSuggestionFiles = { existing: (item.attachments || []).map((file, index) => ({ ...file, originalIndex: index })), added: [] };
+        state.editingSuggestionFilesFor = item.id;
+      }
+      const editFiles = state.editingSuggestionFiles;
+      const fileRows = editing ? '<div class="suggestion-edit-files">' + editFiles.existing.map((file,index) => '<div class="task-file-chip"><span class="task-file-symbol">↧</span><span class="task-file-name">' + esc(file.name || 'Файл') + '</span><button type="button" class="task-file-remove" data-action="remove-suggestion-existing-file" data-index="' + index + '" aria-label="Удалить файл">×</button></div>').join('') + editFiles.added.map((file,index) => '<div class="task-file-chip"><span class="task-file-symbol">＋</span><span class="task-file-name">' + esc(file.name) + '</span><button type="button" class="task-file-remove" data-action="remove-suggestion-added-file" data-index="' + index + '" aria-label="Убрать файл">×</button></div>').join('') + '</div>' : '';
       const editor = editing
-        ? '<form class="suggestion-edit-form" data-suggestion-edit="' + esc(item.id) + '"><label>Название задания<input name="title" required maxlength="180" value="' + esc(item.title || '') + '"></label><label>Ссылка на материал<input name="attachmentUrl" type="url" maxlength="2048" value="' + esc(item.attachmentUrl || '') + '" placeholder="https://..."></label><p class="muted">Прикреплённые файлы сохранятся без изменений.</p><div class="actions"><button class="btn primary" type="submit">Сохранить изменения</button><button class="btn" type="button" data-edit-cancel>Отмена</button></div></form>'
+        ? '<form class="suggestion-edit-form" data-suggestion-edit="' + esc(item.id) + '"><label>Название задания<input name="title" required maxlength="180" value="' + esc(item.title || '') + '"></label><label>Ссылка на материал<input name="attachmentUrl" type="url" maxlength="2048" value="' + esc(item.attachmentUrl || '') + '" placeholder="https://..."></label><label class="suggestion-file-picker">Добавить файлы<input name="newAttachments" type="file" multiple accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.rtf,.jpg,.jpeg,.png,.webp,.zip"></label>' + fileRows + '<div class="actions"><button class="btn primary" type="submit">Сохранить изменения</button><button class="btn" type="button" data-edit-cancel>Отмена</button></div></form>'
         : '<div class="actions"><button class="btn" type="button" data-edit-suggestion="' + esc(item.id) + '">Изменить ДЗ</button><button class="btn primary" data-review="approve" data-id="' + esc(item.id) + '">Одобрить и опубликовать</button><button class="btn danger" data-review="reject" data-id="' + esc(item.id) + '">Отклонить</button></div>';
       return '<article class="panel moderation-card" data-key="suggestion-' + esc(item.id) + '"><div class="meta"><span>' + esc(item.subject || 'Без предмета') + '</span><span>Предложено ' + esc(dateText(item.createdAt)) + '</span></div><h2>' + esc(item.title) + '</h2>' + (item.attachments?.length ? '<div class="task-attachments">' + item.attachments.map(file => '<span class="task-attachment-link">↧ ' + esc(file.name || 'Файл') + '</span>').join('') + '</div>' : '') + (item.attachmentUrl ? '<p><a class="task-attachment-link" href="' + esc(item.attachmentUrl) + '" target="_blank" rel="noopener noreferrer">↗ Открыть ссылку</a></p>' : '') + '<div class="meta"><span>Пара: ' + esc([weekdayNames[item.weekday] || '', dateText(item.lessonDate), item.lessonTime || ''].filter(Boolean).join(' · ')) + '</span></div>' + editor + '</article>';
     }).join('') + '</div>' : empty('Новых предложений нет', 'Когда студент предложит домашнее задание, оно появится здесь.')) +
@@ -2109,14 +2116,37 @@ async function saveSuggestionEdits(form) {
       attachmentUrl = parsed.href;
     } catch { return notify('Укажи корректную ссылку с https:// или http://.', 'error'); }
   }
+  const editFiles = state.editingSuggestionFiles;
+  const uploadedPaths = [];
   setBusy(true);
   try {
+    const attachments = editFiles.existing.map(({ originalIndex, ...file }) => file);
+    for (const file of editFiles.added) {
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const storagePath = state.group.id + '/homework/' + suggestionId + '/' + crypto.randomUUID() + '_' + safeName;
+      const { error } = await supabase.storage.from('group-materials').upload(storagePath, file, {
+        contentType: file.type || 'application/octet-stream', upsert: false
+      });
+      if (error) throw error;
+      uploadedPaths.push(storagePath);
+      attachments.push({ name: file.name, size: file.size, contentType: file.type || 'application/octet-stream', storagePath });
+    }
     await updateDoc(groupDocument('taskSuggestions', suggestionId), {
-      title, attachmentUrl, updatedAt: serverTimestamp()
+      title, attachmentUrl, attachments, updatedAt: serverTimestamp()
     });
+    const kept = new Set(attachments.map(file => file.storagePath).filter(Boolean));
+    const removedPaths = (state.suggestions.find(item => item.id === suggestionId)?.attachments || [])
+      .map(file => file.storagePath).filter(path => path && !kept.has(path));
+    if (removedPaths.length) {
+      const { error } = await supabase.storage.from('group-materials').remove(removedPaths);
+      if (error) notify('Изменения сохранены, но часть старых файлов не удалось удалить из хранилища.', 'error');
+    }
     state.editingSuggestionId = null;
-    notify('Предложение обновлено.', 'success');
+    state.editingSuggestionFilesFor = null;
+    state.editingSuggestionFiles = { existing: [], added: [] };
+    notify('Предложение и файлы обновлены.', 'success');
   } catch (error) {
+    if (uploadedPaths.length) await supabase.storage.from('group-materials').remove(uploadedPaths).catch(() => {});
     notify(error.message || 'Не удалось сохранить изменения.', 'error');
   } finally { setBusy(false); }
 }
@@ -2360,6 +2390,14 @@ function bindEvents() {
     }
 
     if (button.dataset.action === 'delete-task') return deleteTask(button.dataset.id);
+    if (button.dataset.action === 'remove-suggestion-existing-file') {
+      state.editingSuggestionFiles.existing.splice(Number(button.dataset.index), 1);
+      return render();
+    }
+    if (button.dataset.action === 'remove-suggestion-added-file') {
+      state.editingSuggestionFiles.added.splice(Number(button.dataset.index), 1);
+      return render();
+    }
     if (button.dataset.action === 'remove-task-file') {
       state.taskFiles.splice(Number(button.dataset.index), 1);
       updateSelectedTaskFiles();
@@ -2434,7 +2472,7 @@ function bindEvents() {
       return;
     }
     if (button.dataset.editSuggestion) { state.editingSuggestionId = button.dataset.editSuggestion; return render(); }
-    if (button.hasAttribute('data-edit-cancel')) { state.editingSuggestionId = null; return render(); }
+    if (button.hasAttribute('data-edit-cancel')) { state.editingSuggestionId = null; state.editingSuggestionFilesFor = null; state.editingSuggestionFiles = { existing: [], added: [] }; return render(); }
     if (button.dataset.review) return reviewSuggestion(button.dataset.id, button.dataset.review === 'approve');
   });
 
@@ -2459,6 +2497,19 @@ function bindEvents() {
   });
 
   root.addEventListener('change', async event => {
+    if (event.target.matches('[data-suggestion-edit] [name="newAttachments"]')) {
+      const picked = Array.from(event.target.files || []);
+      const current = state.editingSuggestionFiles.added;
+      for (const file of picked) {
+        if (!current.some(item => item.name === file.name && item.size === file.size && item.lastModified === file.lastModified)) current.push(file);
+      }
+      if (state.editingSuggestionFiles.existing.length + current.length > 10) {
+        current.splice(Math.max(0, 10 - state.editingSuggestionFiles.existing.length));
+        notify('Можно прикрепить не более 10 файлов.', 'error');
+      }
+      event.target.value = '';
+      return render();
+    }
     if (event.target.matches('#task-form [name="attachments"]')) {
       const picked = Array.from(event.target.files || []);
       const current = state.taskFiles || (state.taskFiles = []);
