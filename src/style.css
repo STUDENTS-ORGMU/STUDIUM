@@ -1171,3 +1171,9 @@
   .attendance-calendar-heading{align-items:flex-start;flex-direction:column}
   .attendance-calendar-date{width:100%;justify-content:space-between}
 }
+
+
+/* Leader controls in the group roster */
+.group-member-remove{flex:0 0 auto;color:#9b4b43;font-size:11px;padding:7px 10px}
+.group-member-remove:hover{background:#f8eeec;color:#873b34}
+@media(max-width:560px){.group-member-row{flex-wrap:wrap}.group-member-name{flex-basis:calc(100% - 62px)}.group-member-remove{margin-left:auto}}
