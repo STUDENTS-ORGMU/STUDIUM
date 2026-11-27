@@ -1026,7 +1026,7 @@ function renderModeration() {
       const editFiles = state.editingSuggestionFiles;
       const fileRows = editing ? '<div class="suggestion-edit-files">' + editFiles.existing.map((file,index) => '<div class="task-file-chip"><span class="task-file-symbol">↧</span><span class="task-file-name">' + esc(file.name || 'Файл') + '</span><button type="button" class="task-file-remove" data-action="remove-suggestion-existing-file" data-index="' + index + '" aria-label="Удалить файл">×</button></div>').join('') + editFiles.added.map((file,index) => '<div class="task-file-chip"><span class="task-file-symbol">＋</span><span class="task-file-name">' + esc(file.name) + '</span><button type="button" class="task-file-remove" data-action="remove-suggestion-added-file" data-index="' + index + '" aria-label="Убрать файл">×</button></div>').join('') + '</div>' : '';
       const editor = editing
-        ? '<form class="suggestion-edit-form" data-suggestion-edit="' + esc(item.id) + '"><label>Название задания<input name="title" required maxlength="180" value="' + esc(item.title || '') + '"></label><label>Ссылка на материал<input name="attachmentUrl" type="url" maxlength="2048" value="' + esc(item.attachmentUrl || '') + '" placeholder="https://..."></label><label class="suggestion-file-picker">Добавить файлы<input name="newAttachments" type="file" multiple accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.rtf,.jpg,.jpeg,.png,.webp,.zip"></label>' + fileRows + '<div class="actions"><button class="btn primary" type="submit">Сохранить изменения</button><button class="btn" type="button" data-edit-cancel>Отмена</button></div></form>'
+        ? '<form class="suggestion-edit-form" data-suggestion-edit="' + esc(item.id) + '"><label>Название задания<input name="title" required maxlength="180" value="' + esc(item.title || '') + '"></label><label>Ссылка на материал<input name="attachmentUrl" type="url" maxlength="2048" value="' + esc(item.attachmentUrl || '') + '" placeholder="https://..."></label><label class="suggestion-file-picker">Добавить файлы<input name="newAttachments" type="file" multiple accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.rtf,.jpg,.jpeg,.png,.webp,.zip"></label>' + (state.uploadingSuggestionFiles === item.id ? '<p class="suggestion-upload-status" role="status"><span class="suggestion-upload-spinner"></span>Идёт загрузка файлов…</p>' : '') + fileRows + '<div class="actions"><button class="btn primary" type="submit">Сохранить изменения</button><button class="btn" type="button" data-edit-cancel>Отмена</button></div></form>'
         : '<div class="actions"><button class="btn" type="button" data-edit-suggestion="' + esc(item.id) + '">Изменить ДЗ</button><button class="btn primary" data-review="approve" data-id="' + esc(item.id) + '">Одобрить и опубликовать</button><button class="btn danger" data-review="reject" data-id="' + esc(item.id) + '">Отклонить</button></div>';
       return '<article class="panel moderation-card" data-key="suggestion-' + esc(item.id) + '"><div class="meta"><span>' + esc(item.subject || 'Без предмета') + '</span><span>Предложено ' + esc(dateText(item.createdAt)) + '</span></div><h2>' + esc(item.title) + '</h2>' + (item.attachments?.length ? '<div class="task-attachments">' + item.attachments.map(file => '<span class="task-attachment-link">↧ ' + esc(file.name || 'Файл') + '</span>').join('') + '</div>' : '') + (item.attachmentUrl ? '<p><a class="task-attachment-link" href="' + esc(item.attachmentUrl) + '" target="_blank" rel="noopener noreferrer">↗ Открыть ссылку</a></p>' : '') + '<div class="meta"><span>Пара: ' + esc([weekdayNames[item.weekday] || '', dateText(item.lessonDate), item.lessonTime || ''].filter(Boolean).join(' · ')) + '</span></div>' + editor + '</article>';
     }).join('') + '</div>' : empty('Новых предложений нет', 'Когда студент предложит домашнее задание, оно появится здесь.')) +
@@ -2118,7 +2118,9 @@ async function saveSuggestionEdits(form) {
   }
   const editFiles = state.editingSuggestionFiles;
   const uploadedPaths = [];
+  state.uploadingSuggestionFiles = suggestionId;
   setBusy(true);
+  render();
   try {
     const attachments = editFiles.existing.map(({ originalIndex, ...file }) => file);
     for (const file of editFiles.added) {
@@ -2148,7 +2150,7 @@ async function saveSuggestionEdits(form) {
   } catch (error) {
     if (uploadedPaths.length) await supabase.storage.from('group-materials').remove(uploadedPaths).catch(() => {});
     notify(error.message || 'Не удалось сохранить изменения.', 'error');
-  } finally { setBusy(false); }
+  } finally { state.uploadingSuggestionFiles = null; setBusy(false); render(); }
 }
 
 async function reviewSuggestion(suggestionId, approve) {
