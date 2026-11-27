@@ -1063,7 +1063,7 @@ function renderScheduleDay(weekNumber, weekday, todayInfo, tomorrowInfo) {
     : (dateClass.includes('is-tomorrow') ? '<span class="day-badge tomorrow-badge">Завтра</span>' : '');
   return '<article class="schedule-day' + dateClass + '">' +
     '<header class="schedule-day-header"><strong>' + names[weekday] + '</strong>' + badge + '</header>' +
-    '<div class="schedule-slots">' + slotMarkup.join('') + '</div>' +
+    '<div class="schedule-slots" style="grid-template-rows:repeat(' + schedulePeriods.length + ',minmax(112px,1fr))">' + slotMarkup.join('') + '</div>' +
     (outside.length ? '<div class="schedule-unplaced">' + outside.map(item => scheduleLessonCard(item, 0, 1)).join('') + '</div>' : '') +
     '</article>';
 }
