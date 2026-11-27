@@ -907,3 +907,17 @@
 :root[data-theme] .schedule-homework-action:hover{
   color:var(--ink)!important;background:var(--soft)!important;border-color:var(--theme-accent)!important;
 }
+
+
+/* Homework attachments */
+.task-attachments-fields{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+.task-attachments-fields input[type="file"]{max-width:100%;font-size:12px}
+.task-attachments{display:flex;flex-wrap:wrap;gap:7px;margin:12px 0}
+.task-attachment-link{
+  display:inline-flex;align-items:center;gap:5px;width:max-content;max-width:100%;
+  padding:6px 10px;border:1px solid var(--line,#ddd);border-radius:8px;
+  background:var(--soft,#f5f5f5);color:var(--ink,#222);font:600 12px/1.3 inherit;
+  text-decoration:none;cursor:pointer;overflow-wrap:anywhere;
+}
+.task-attachment-link:hover{border-color:var(--theme-accent,var(--ink,#222));background:var(--paper,#fff)}
+@media(max-width:680px){.task-attachments-fields{grid-template-columns:1fr}}
