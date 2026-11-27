@@ -232,22 +232,23 @@ function renderAuth(mode = 'login', message = '') {
 
 async function ensureProfile(user) {
   const { data, error } = await supabase.from('profiles')
-    .select('id, username, full_name, patronymic').eq('id', user.id).maybeSingle();
+    .select('id, username, full_name, patronymic, avatar_path').eq('id', user.id).maybeSingle();
   if (error) throw error;
   let profile = data;
   if (!profile) {
     const username = normalizeUsername(user.user_metadata?.username || (user.email || '').split('@')[0]);
     const fullName = String(user.user_metadata?.full_name || username || 'Студент');
     const { data: created, error: insertError } = await supabase.from('profiles').insert({
-      id: user.id, username, full_name: fullName, patronymic: ''
-    }).select('id, username, full_name, patronymic').single();
+      id: user.id, username, full_name: fullName, patronymic: '', avatar_path: null
+    }).select('id, username, full_name, patronymic, avatar_path').single();
     if (insertError) throw insertError;
     profile = created;
   }
   state.profile = {
     fullName: profile.full_name || '',
     patronymic: profile.patronymic || '',
-    username: profile.username || ''
+    username: profile.username || '',
+    avatarPath: profile.avatar_path || null
   };
 }
 
@@ -429,7 +430,14 @@ async function loadWorkspace() {
   state.lessons = lessons.docs.map(item => ({ id: item.id, ...item.data() }));
   state.progress = new Map(progress.docs.map(item => [item.data().taskId, item.data().completed === true]));
   state.attendance = attendance.docs.map(item => ({ id: item.id, ...item.data() }));
-  state.groupMembers = members.docs.map(item => ({ id: item.id, ...item.data() }));
+  const memberRows = members.docs.map(item => ({ id: item.id, ...item.data() }));
+  const memberIds = memberRows.map(member => member.id).filter(Boolean);
+  if (memberIds.length) {
+    const { data: avatarProfiles, error: avatarProfilesError } = await supabase.from('profiles').select('id, avatar_path').in('id', memberIds);
+    if (avatarProfilesError) throw avatarProfilesError;
+    const avatarByUser = new Map((avatarProfiles || []).map(profile => [profile.id, profile.avatar_path]));
+    state.groupMembers = memberRows.map(member => ({ ...member, avatarPath: avatarByUser.get(member.id) || null }));
+  } else state.groupMembers = memberRows;
   state.attendanceRecords = attendanceRecords.docs.map(item => ({ id: item.id, ...item.data() }));
   state.materials = materials.docs.map(item => ({ id: item.id, ...item.data() }));
   state.makeups = makeups.docs.map(item => ({ id: item.id, ...item.data() }));
@@ -752,6 +760,14 @@ function renderProfile() {
   const username = state.profile?.username || '';
   return heading('ЛИЧНЫЙ КАБИНЕТ', 'Мой профиль', 'Обнови свои данные. Изменения ФИО появятся в списке группы и журнале посещаемости.') +
     '<div class="profile-settings-grid">' +
+      '<section class="panel profile-settings-card profile-avatar-card">' +
+        '<p class="eyebrow">00 · АВАТАР</p><h2>Фотография профиля</h2>' +
+        '<p class="muted">Загрузи изображение — оно будет видно участникам твоих групп.</p>' +
+        '<div class="profile-avatar-editor">' +
+          (state.profile?.avatarPath ? '<img class="profile-avatar-preview" src="' + esc(supabase.storage.from("avatars").getPublicUrl(state.profile.avatarPath).data.publicUrl) + '" alt="Текущий аватар">' : '<span class="profile-avatar-preview profile-avatar-placeholder">' + esc(fullName.trim().split(/\\s+/).slice(0,2).map(part => part[0] || "").join("").toUpperCase() || "?") + '</span>') +
+          '<label class="btn secondary profile-avatar-pick">Выбрать изображение<input id="profile-avatar-file" type="file" accept="image/png,image/jpeg,image/webp,image/avif" hidden></label>' +
+        '</div><small class="muted">PNG, JPG, WebP или AVIF · до 5 МБ.</small>' +
+      '</section>' +
       '<section class="panel profile-settings-card">' +
         '<p class="eyebrow">01 · ЛИЧНЫЕ ДАННЫЕ</p><h2>ФИО</h2>' +
         '<p class="muted">Одно поле для фамилии, имени и отчества.</p>' +
@@ -1848,7 +1864,7 @@ function renderManage() {
     const initials = name.trim().split(/\s+/).slice(0,2).map(part => part[0] || '').join('').toUpperCase();
     const memberLabel = special ? 'Бегущий по болоту' : (isLeader ? 'Староста' : 'Студент');
     return '<article class="group-member-row' + (special ? ' group-member-row-special' : '') + '">' +
-      (special ? '<img class="group-member-avatar group-member-avatar-image" src="' + import.meta.env.BASE_URL + 'zhabov-avatar.webp" alt="Аватар Жабова Жаба Жабовича">' : '<span class="group-member-avatar">' + esc(initials || 'У') + '</span>') +
+      (member.avatarPath ? '<img class="group-member-avatar group-member-avatar-image" src="' + esc(supabase.storage.from('avatars').getPublicUrl(member.avatarPath).data.publicUrl) + '" alt="Аватар ' + esc(name) + '">' : '<span class="group-member-avatar">' + esc(initials || 'У') + '</span>') +
       '<div class="group-member-name"><strong>' + esc(name) + (isCurrent ? ' <span class="group-you-label">Это вы</span>' : '') + '</strong>' +
       '<small>' + memberLabel + '</small></div>' +
       (isLeader ? '<span class="group-member-role">Староста</span>' : '<span class="group-member-role student' + (special ? ' swamp-runner' : '') + '">' + memberLabel + '</span>') +
@@ -1933,6 +1949,35 @@ function profilePermissionMessage(error) {
     return 'Подтверди личность текущим паролем и повтори действие.';
   }
   return error?.message || 'Не удалось сохранить изменения профиля.';
+}
+
+async function uploadProfileAvatar(file) {
+  if (!state.user?.id) return;
+  if (!/^image\\/(png|jpeg|webp|avif)$/.test(file.type) || file.size > 5 * 1024 * 1024) {
+    return notify('Выбери PNG, JPG, WebP или AVIF размером до 5 МБ.', 'error');
+  }
+  setBusy(true);
+  try {
+    const ext = ({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/avif': 'avif' })[file.type];
+    const path = state.user.id + '/' + crypto.randomUUID() + '.' + ext;
+    const { error: uploadError } = await supabase.storage.from('avatars').upload(path, file, {
+      cacheControl: '3600', upsert: false, contentType: file.type
+    });
+    if (uploadError) throw uploadError;
+    const oldPath = state.profile?.avatarPath;
+    const { error: profileError } = await supabase.from('profiles').update({ avatar_path: path, updated_at: new Date().toISOString() }).eq('id', state.user.id);
+    if (profileError) {
+      await supabase.storage.from('avatars').remove([path]);
+      throw profileError;
+    }
+    if (oldPath) await supabase.storage.from('avatars').remove([oldPath]);
+    state.profile = { ...state.profile, avatarPath: path };
+    state.groupMembers = state.groupMembers.map(member => member.id === state.user.id ? { ...member, avatarPath: path } : member);
+    notify('Аватар профиля сохранён в Supabase.', 'success');
+    renderWorkspace();
+  } catch (error) {
+    notify(error.message || 'Не удалось загрузить аватар.', 'error');
+  } finally { setBusy(false); }
 }
 
 async function saveProfile(form) {
@@ -2532,6 +2577,11 @@ function bindEvents() {
   });
 
   root.addEventListener('change', async event => {
+    if (event.target.id === 'profile-avatar-file') {
+      const file = event.target.files?.[0];
+      event.target.value = '';
+      if (file) return uploadProfileAvatar(file);
+    }
     if (event.target.matches('[data-suggestion-edit] [name="newAttachments"]')) {
       const picked = Array.from(event.target.files || []);
       const current = state.editingSuggestionFiles.added;
