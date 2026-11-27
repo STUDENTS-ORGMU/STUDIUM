@@ -1330,3 +1330,132 @@
   .appearance-mode-switch{width:100%}
   .appearance-mode-switch button{flex:1}
 }
+
+
+/* Dark mode refinement: neutral charcoal surfaces, no green-tinted base */
+:root[data-theme-mode="dark"]{
+  --ink:#e9edf1;
+  --muted:#a5adb6;
+  --line:#343a42;
+  --paper:#1c2127;
+  --bg:#12161b;
+  --soft:#252b32;
+  --theme-lecture:#303740;
+  --theme-seminar:#20262d;
+}
+:root[data-theme-mode="dark"] body,
+:root[data-theme-mode="dark"] .layout,
+:root[data-theme-mode="dark"] .main{background:var(--bg);color:var(--ink)}
+:root[data-theme-mode="dark"] .sidebar,
+:root[data-theme-mode="dark"] .mobile-head,
+:root[data-theme-mode="dark"] .group-box,
+:root[data-theme-mode="dark"] .panel,
+:root[data-theme-mode="dark"] .stats article,
+:root[data-theme-mode="dark"] .task-card,
+:root[data-theme-mode="dark"] .task-card.done,
+:root[data-theme-mode="dark"] .moderation-card,
+:root[data-theme-mode="dark"] .history>div,
+:root[data-theme-mode="dark"] .lesson,
+:root[data-theme-mode="dark"] .attendance-register,
+:root[data-theme-mode="dark"] .attendance-lesson-card,
+:root[data-theme-mode="dark"] .attendance-report-toolbar,
+:root[data-theme-mode="dark"] .attendance-person-row,
+:root[data-theme-mode="dark"] .attendance-subpart,
+:root[data-theme-mode="dark"] .attendance-part-tab,
+:root[data-theme-mode="dark"] .schedule-day,
+:root[data-theme-mode="dark"] .schedule-week-card,
+:root[data-theme-mode="dark"] .schedule-empty-slot,
+:root[data-theme-mode="dark"] .schedule-summary article,
+:root[data-theme-mode="dark"] .schedule-editor,
+:root[data-theme-mode="dark"] .schedule-cell-editor,
+:root[data-theme-mode="dark"] .schedule-lesson.seminar-lesson,
+:root[data-theme-mode="dark"] .schedule-lesson.lecture-lesson,
+:root[data-theme-mode="dark"] .empty,
+:root[data-theme-mode="dark"] .invite+.panel,
+:root[data-theme-mode="dark"] .deadline-calendar-panel,
+:root[data-theme-mode="dark"] .material-row,
+:root[data-theme-mode="dark"] .material-form,
+:root[data-theme-mode="dark"] .group-member-row,
+:root[data-theme-mode="dark"] .profile-avatar-card,
+:root[data-theme-mode="dark"] .attendance-calendar-panel{
+  background:var(--paper);color:var(--ink);border-color:var(--line);
+}
+:root[data-theme-mode="dark"] .deadline-calendar-panel .deadline-calendar-day,
+:root[data-theme-mode="dark"] .deadline-calendar-panel .deadline-month-progress,
+:root[data-theme-mode="dark"] .deadline-calendar-panel .deadline-calendar-day:not(.selected):not(.today){
+  background:var(--soft);color:var(--ink);border-color:var(--line);
+}
+:root[data-theme-mode="dark"] .deadline-calendar-panel .deadline-calendar-day.selected,
+:root[data-theme-mode="dark"] .deadline-calendar-panel .deadline-calendar-day.today{
+  background:color-mix(in srgb,var(--theme-accent) 30%,var(--paper));
+  color:var(--ink);border-color:var(--theme-accent);
+}
+:root[data-theme-mode="dark"] .deadline-calendar-panel h2,
+:root[data-theme-mode="dark"] .deadline-calendar-panel strong,
+:root[data-theme-mode="dark"] .deadline-calendar-panel .deadline-day-number{color:var(--ink)}
+:root[data-theme-mode="dark"] .deadline-calendar-panel .deadline-calendar-day small,
+:root[data-theme-mode="dark"] .deadline-calendar-panel .deadline-month-progress span{color:var(--muted)}
+:root[data-theme-mode="dark"] .deadline-calendar-panel .deadline-month-arrow{
+  background:var(--paper);color:var(--ink);border-color:var(--line);
+}
+:root[data-theme-mode="dark"] .deadline-calendar-panel .deadline-pending-banner{
+  background:#382d20;color:#e9c994;border-color:#59472f;
+}
+:root[data-theme-mode="dark"] .deadline-calendar-panel .deadline-calendar-legend{color:var(--muted)}
+:root[data-theme-mode="dark"] .material-form input,
+:root[data-theme-mode="dark"] .material-form textarea,
+:root[data-theme-mode="dark"] .material-form select,
+:root[data-theme-mode="dark"] .material-form input[type=file],
+:root[data-theme-mode="dark"] .attendance-report-controls input,
+:root[data-theme-mode="dark"] .attendance-calendar-date input,
+:root[data-theme-mode="dark"] .roster-official select,
+:root[data-theme-mode="dark"] .schedule-inline-form input,
+:root[data-theme-mode="dark"] .schedule-inline-form select,
+:root[data-theme-mode="dark"] .suggestion-edit-form input,
+:root[data-theme-mode="dark"] .makeup-form input{
+  background:#14191f;color:var(--ink);border-color:var(--line);
+}
+:root[data-theme-mode="dark"] .material-form input::placeholder,
+:root[data-theme-mode="dark"] .material-form textarea::placeholder,
+:root[data-theme-mode="dark"] input::placeholder,
+:root[data-theme-mode="dark"] textarea::placeholder{color:#89939e}
+:root[data-theme-mode="dark"] .material-icon,
+:root[data-theme-mode="dark"] .group-member-avatar,
+:root[data-theme-mode="dark"] .group-member-role,
+:root[data-theme-mode="dark"] .group-you-label,
+:root[data-theme-mode="dark"] .avatar{
+  background:var(--soft);color:var(--ink);border-color:var(--line);
+}
+:root[data-theme-mode="dark"] .group-member-row-special{
+  background:#202a27;border-color:#43534d;
+}
+:root[data-theme-mode="dark"] .group-member-role.swamp-runner{
+  background:#293a34;color:#c1d7cd;
+}
+:root[data-theme-mode="dark"] .material-delete{
+  background:#302326;color:#efb7b2;border-color:#503338;
+}
+:root[data-theme-mode="dark"] .material-delete:hover{background:#412b2d}
+:root[data-theme-mode="dark"] .deadline-calendar-panel .deadline-calendar-day.has-pending{
+  background:#342b20;border-color:#6b5434;color:#f0d4a6;
+}
+:root[data-theme-mode="dark"] .deadline-calendar-panel .deadline-calendar-day.all-complete{
+  background:#202e29;border-color:#3d5a4b;color:#c1e0cf;
+}
+:root[data-theme-mode="dark"] .deadline-calendar-panel .deadline-calendar-day.today{
+  outline-color:var(--theme-accent);
+}
+:root[data-theme-mode="dark"] .btn.secondary,
+:root[data-theme-mode="dark"] .btn.ghost,
+:root[data-theme-mode="dark"] .deadline-calendar-controls .btn{
+  background:var(--paper);color:var(--ink);border-color:var(--line);
+}
+:root[data-theme-mode="dark"] .btn.primary{
+  background:var(--theme-accent);border-color:var(--theme-accent);color:#fff;
+}
+:root[data-theme-mode="dark"] .deadline-calendar-panel .deadline-calendar-controls .btn.primary,
+:root[data-theme-mode="dark"] .deadline-calendar-panel .deadline-calendar-controls .btn.ghost:first-child{
+  background:var(--theme-accent);border-color:var(--theme-accent);color:#fff;
+}
+:root[data-theme-mode="dark"] .appearance-mode-switch{background:var(--soft)}
+:root[data-theme-mode="dark"] .appearance-mode-switch button.active{background:#343b44;color:#f2f4f6}
