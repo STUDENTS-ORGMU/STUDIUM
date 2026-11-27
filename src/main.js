@@ -45,6 +45,7 @@ const state = {
   role: null,
   tab: 'overview',
   theme: localStorage.getItem('studium-theme') || 'mono',
+  themeMode: localStorage.getItem('studium-theme-mode') || 'light',
   tasks: [],
   suggestions: [],
   lessons: [],
@@ -232,15 +233,15 @@ function renderAuth(mode = 'login', message = '') {
 
 async function ensureProfile(user) {
   const { data, error } = await supabase.from('profiles')
-    .select('id, username, full_name, patronymic, avatar_path').eq('id', user.id).maybeSingle();
+    .select('id, username, full_name, patronymic, avatar_path, appearance_theme, appearance_mode').eq('id', user.id).maybeSingle();
   if (error) throw error;
   let profile = data;
   if (!profile) {
     const username = normalizeUsername(user.user_metadata?.username || (user.email || '').split('@')[0]);
     const fullName = String(user.user_metadata?.full_name || username || 'Студент');
     const { data: created, error: insertError } = await supabase.from('profiles').insert({
-      id: user.id, username, full_name: fullName, patronymic: '', avatar_path: null
-    }).select('id, username, full_name, patronymic, avatar_path').single();
+      id: user.id, username, full_name: fullName, patronymic: '', avatar_path: null, appearance_theme: 'mono', appearance_mode: 'light'
+    }).select('id, username, full_name, patronymic, avatar_path, appearance_theme, appearance_mode').single();
     if (insertError) throw insertError;
     profile = created;
   }
@@ -248,8 +249,13 @@ async function ensureProfile(user) {
     fullName: profile.full_name || '',
     patronymic: profile.patronymic || '',
     username: profile.username || '',
-    avatarPath: profile.avatar_path || null
+    avatarPath: profile.avatar_path || null,
+    appearanceTheme: profile.appearance_theme || 'mono',
+    appearanceMode: profile.appearance_mode || 'light'
   };
+  state.theme = state.profile.appearanceTheme;
+  state.themeMode = state.profile.appearanceMode;
+  applyTheme(state.theme, state.themeMode);
 }
 
 async function loadMemberships() {
@@ -737,22 +743,47 @@ const themeOptions = [
   { id: 'lavender', name: 'Дымчатая лаванда', note: 'Мягкий холодный оттенок', colors: ['#F8F7FA','#E5E0EA','#302B36','#A69BAD'] },
 ];
 
-function applyTheme(themeId) {
+function applyTheme(themeId = state.theme, mode = state.themeMode) {
   const theme = themeOptions.find(item => item.id === themeId) || themeOptions[0];
   state.theme = theme.id;
+  state.themeMode = mode === 'dark' ? 'dark' : 'light';
   document.documentElement.dataset.theme = theme.id;
+  document.documentElement.dataset.themeMode = state.themeMode;
   localStorage.setItem('studium-theme', theme.id);
+  localStorage.setItem('studium-theme-mode', state.themeMode);
+}
+
+async function saveAppearance(changes = {}) {
+  applyTheme(changes.theme || state.theme, changes.mode || state.themeMode);
+  renderWorkspace();
+  if (!state.user?.id) return;
+  const { error } = await supabase.from('profiles').update({
+    appearance_theme: state.theme,
+    appearance_mode: state.themeMode,
+    updated_at: new Date().toISOString()
+  }).eq('id', state.user.id);
+  if (error) {
+    notify('Не удалось сохранить оформление в аккаунте: ' + error.message, 'error');
+    return;
+  }
+  state.profile = { ...state.profile, appearanceTheme: state.theme, appearanceMode: state.themeMode };
+  notify('Оформление сохранено в аккаунте.', 'success');
 }
 
 function renderAppearance() {
-  return heading('ПЕРСОНАЛИЗАЦИЯ', 'Оформление', 'Выбери цветовую тему STUDIUM. Она сохранится на этом устройстве.') +
+  return heading('ПЕРСОНАЛИЗАЦИЯ', 'Оформление', 'Настрой отдельно светлый или тёмный режим и цветовую палитру. Выбор сохранится в аккаунте.') +
+    '<section class="appearance-mode panel"><div><p class="eyebrow">РЕЖИМ ОТОБРАЖЕНИЯ</p><strong>Тема интерфейса</strong><small>Не зависит от выбранной цветовой палитры</small></div><div class="appearance-mode-switch" role="group" aria-label="Режим интерфейса">' +
+      '<button type="button" data-theme-mode="light" class="' + (state.themeMode === 'light' ? 'active' : '') + '" aria-pressed="' + (state.themeMode === 'light') + '">☀ Светлая</button>' +
+      '<button type="button" data-theme-mode="dark" class="' + (state.themeMode === 'dark' ? 'active' : '') + '" aria-pressed="' + (state.themeMode === 'dark') + '">☾ Тёмная</button>' +
+    '</div></section>' +
+    '<p class="eyebrow theme-palette-label">ЦВЕТОВАЯ ПАЛИТРА</p>' +
     '<section class="theme-settings-grid">' +
     themeOptions.map(theme => '<button type="button" class="theme-option' + (state.theme === theme.id ? ' active' : '') + '" data-theme-choice="' + theme.id + '" aria-pressed="' + (state.theme === theme.id) + '">' +
       '<span class="theme-swatches">' + theme.colors.map(color => '<i style="background:' + color + '"></i>').join('') + '</span>' +
       '<span class="theme-option-copy"><strong>' + theme.name + '</strong><small>' + theme.note + '</small></span>' +
       '<span class="theme-check">' + (state.theme === theme.id ? '✓' : '') + '</span>' +
     '</button>').join('') +
-    '</section><p class="muted theme-footnote">Тема меняет фон, карточки расписания, кнопки и акцентные элементы. Выбор сохраняется только на этом устройстве.</p>';
+    '</section><p class="muted theme-footnote">Светлый или тёмный режим можно менять независимо от палитры. Оба параметра сохраняются в профиле Supabase и применяются на других устройствах.</p>';
 }
 
 function renderProfile() {
@@ -2443,7 +2474,8 @@ function bindEvents() {
     if (!button) return;
     if (state.busy && !button.dataset.tab && button.dataset.action !== 'menu') return;
     if (button.dataset.mode) return renderAuth(button.dataset.mode);
-    if (button.dataset.themeChoice) { applyTheme(button.dataset.themeChoice); renderWorkspace(); return; }
+    if (button.dataset.themeChoice) return saveAppearance({ theme: button.dataset.themeChoice });
+    if (button.dataset.themeMode) return saveAppearance({ mode: button.dataset.themeMode });
     if (button.dataset.tab) { state.tab = button.dataset.tab; return renderWorkspace(); }
     if (button.dataset.action === 'logout') return doSignOut();
     if (button.dataset.action === 'menu') { document.querySelector('.sidebar')?.classList.toggle('open'); return; }
