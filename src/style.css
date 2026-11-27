@@ -1312,6 +1312,13 @@
 :root[data-theme-mode="dark"] .roster-excuse-btn{background:#173b27;border-color:#315d40;color:#b9e8c7}
 :root[data-theme-mode="dark"] .empty{border-color:var(--line)}
 :root[data-theme-mode="dark"] .appearance-mode{display:flex;align-items:center;justify-content:space-between;gap:18px;margin:18px 0 26px;padding:20px}
+/* Keep the appearance card layout identical in light and dark modes */
+.appearance-mode{display:flex;align-items:center;justify-content:space-between;gap:18px;margin:18px 0 26px;padding:20px}
+@media(max-width:680px){
+  .appearance-mode{align-items:stretch;flex-direction:column}
+  .appearance-mode-switch{width:100%}
+  .appearance-mode-switch button{flex:1}
+}
 .appearance-mode>div:first-child{display:flex;flex-direction:column;gap:5px}
 .appearance-mode>div:first-child strong{font:700 16px Manrope,sans-serif;color:var(--ink)}
 .appearance-mode>div:first-child small{font-size:11px;color:var(--muted)}
