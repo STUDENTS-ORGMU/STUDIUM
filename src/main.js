@@ -455,6 +455,8 @@ function navButton(tab, icon, title) {
 }
 
 function renderWorkspace() {
+  const specialMemberUserId = '5394ec65-4ea6-4e32-b08b-0f4471d0b8fd';
+  const groupMemberCount = state.groupMembers.filter(member => member.id !== specialMemberUserId).length;
   const leader = state.role === 'leader';
   const name = displayFullName(state.profile);
   const mainTabs = [
@@ -471,7 +473,7 @@ function renderWorkspace() {
   ].join('');
   const settingsTab = navButton('appearance', 'appearance', 'Оформление');
 
-  frame('<div class="layout"><aside class="sidebar"><a class="wordmark" href="#">STUDIUM</a><div class="group-box"><div class="group-box-heading"><small>ТВОЯ ГРУППА</small></div><strong>' + esc(state.group.name) + '</strong><div class="group-box-meta"><span>' + (leader ? 'Староста' : 'Студент') + '</span><span>' + state.groupMembers.length + ' участн.</span></div></div><nav><div class="nav-section"><small>ОСНОВНОЕ</small>' + mainTabs + '</div><div class="nav-section"><small>УПРАВЛЕНИЕ ГРУППОЙ</small>' + groupTabs + '</div><div class="nav-section"><small>НАСТРОЙКИ</small>' + settingsTab + '</div></nav><div class="side-user"><button type="button" class="side-user-profile" data-tab="profile"><span class="avatar">' + esc(name.slice(0,1).toUpperCase()) + '</span><span class="side-user-copy"><strong>' + esc(name) + '</strong><small>' + esc(state.profile?.username ? '@' + state.profile.username : '') + '</small><em>Мой профиль →</em></span></button><button class="btn ghost" data-action="logout">Выйти</button></div></aside><main class="main"><header class="mobile-head"><button class="btn ghost" data-action="menu">☰</button><a class="wordmark" href="#">STUDIUM</a><span class="role">' + (leader ? 'Староста' : 'Студент') + '</span></header><div class="content">' + renderCurrentTab() + '</div></main></div>');
+  frame('<div class="layout"><aside class="sidebar"><a class="wordmark" href="#">STUDIUM</a><div class="group-box"><div class="group-box-heading"><small>ТВОЯ ГРУППА</small></div><strong>' + esc(state.group.name) + '</strong><div class="group-box-meta"><span>' + (leader ? 'Староста' : 'Студент') + '</span><span>' + groupMemberCount + ' участн.</span></div></div><nav><div class="nav-section"><small>ОСНОВНОЕ</small>' + mainTabs + '</div><div class="nav-section"><small>УПРАВЛЕНИЕ ГРУППОЙ</small>' + groupTabs + '</div><div class="nav-section"><small>НАСТРОЙКИ</small>' + settingsTab + '</div></nav><div class="side-user"><button type="button" class="side-user-profile" data-tab="profile"><span class="avatar">' + esc(name.slice(0,1).toUpperCase()) + '</span><span class="side-user-copy"><strong>' + esc(name) + '</strong><small>' + esc(state.profile?.username ? '@' + state.profile.username : '') + '</small><em>Мой профиль →</em></span></button><button class="btn ghost" data-action="logout">Выйти</button></div></aside><main class="main"><header class="mobile-head"><button class="btn ghost" data-action="menu">☰</button><a class="wordmark" href="#">STUDIUM</a><span class="role">' + (leader ? 'Староста' : 'Студент') + '</span></header><div class="content">' + renderCurrentTab() + '</div></main></div>');
 }
 
 function heading(eyebrow, title, subtitle, action = '') {
