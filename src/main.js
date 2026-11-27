@@ -884,7 +884,9 @@ function taskCards(items) {
     const deleteButton = state.role === 'leader'
       ? '<button type="button" class="task-delete-button" data-action="delete-task" data-id="' + esc(task.id) + '">Удалить ДЗ</button>'
       : '';
-    return '<article data-key="task-' + esc(task.id) + '" class="task-card ' + (done ? 'done' : '') + '"><div class="task-copy"><small>' + esc(task.subject || 'Без предмета') + '</small><h3>' + esc(task.title) + '</h3><p>' + esc(task.description || '') + '</p><div class="meta"><span>Пара: ' + esc(pairLabel || dateLabel) + '</span></div></div><div class="task-card-actions"><label class="check"><input type="checkbox" data-progress="' + esc(task.id) + '" ' + (done ? 'checked' : '') + '> Выполнено</label>' + deleteButton + '</div></article>';
+    const attachments = (task.attachments || []).map((file,index) => '<button type="button" class="task-attachment-link" data-action="open-task-attachment" data-task-id="' + esc(task.id) + '" data-attachment-index="' + index + '">↧ ' + esc(file.name || 'Файл ' + (index + 1)) + '</button>').join('');
+    const attachmentUrl = task.attachmentUrl ? '<a class="task-attachment-link" href="' + esc(task.attachmentUrl) + '" target="_blank" rel="noopener noreferrer">↗ Открыть ссылку</a>' : '';
+    return '<article data-key="task-' + esc(task.id) + '" class="task-card ' + (done ? 'done' : '') + '"><div class="task-copy"><small>' + esc(task.subject || 'Без предмета') + '</small><h3>' + esc(task.title) + '</h3><div class="task-attachments">' + attachments + attachmentUrl + '</div><div class="meta"><span>Пара: ' + esc(pairLabel || dateLabel) + '</span></div></div><div class="task-card-actions"><label class="check"><input type="checkbox" data-progress="' + esc(task.id) + '" ' + (done ? 'checked' : '') + '> Выполнено</label>' + deleteButton + '</div></article>';
   }).join('') + '</div>';
 }
 
@@ -910,7 +912,8 @@ function taskForm(lesson) {
     '<input type="hidden" name="weekNumber" value="' + Number(lesson.weekNumber) + '">' +
     '<input type="hidden" name="lessonTime" value="' + esc(lesson.startsAt || '') + '">' +
     '<label>Название задания<input name="title" required maxlength="180" placeholder="Что нужно сделать?"></label>' +
-    '<label>Описание<textarea name="description" rows="3" placeholder="Дополнительные требования, страницы, вопросы…"></textarea></label>' +
+    '<div class="task-attachments-fields"><label>Файлы <span class="muted">(можно несколько)</span><input type="file" name="attachments" multiple accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.rtf,.jpg,.jpeg,.png,.webp,.zip"></label>' +
+    '<label>Ссылка <span class="muted">(необязательно)</span><input type="url" name="attachmentUrl" maxlength="2048" placeholder="https://..."></label></div>' +
     '<button class="btn primary" type="submit">' + (state.role === 'leader' ? 'Опубликовать' : 'Отправить старосте') + '</button>' +
     '</form></section>';
 }
@@ -1961,14 +1964,40 @@ async function submitTask(form) {
     lessonTime: lesson.startsAt || '',
     lessonDate,
     title: String(values.title || '').trim(),
-    description: String(values.description || '').trim()
+    description: '',
+    attachmentUrl: String(values.attachmentUrl || '').trim(),
+    attachments: []
   };
   if (!payload.title) {
     notify('Укажи название домашнего задания.', 'error');
     return;
   }
+  let attachmentUrl = '';
+  if (payload.attachmentUrl) {
+    try {
+      const parsed = new URL(payload.attachmentUrl);
+      if (!['https:', 'http:'].includes(parsed.protocol)) throw new Error();
+      attachmentUrl = parsed.href;
+    } catch { notify('Укажи корректную ссылку с https:// или http://.', 'error'); return; }
+  }
+  const files = Array.from(form.querySelector('[name="attachments"]')?.files || []);
+  if (files.length > 10) return notify('Можно прикрепить не более 10 файлов.', 'error');
+  if (files.some(file => file.size > 20 * 1024 * 1024)) return notify('Размер каждого файла не должен превышать 20 МБ.', 'error');
   setBusy(true);
+  const uploadedPaths = [];
   try {
+    for (const file of files) {
+      const fileId = crypto.randomUUID();
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const storagePath = state.group.id + '/homework/' + fileId + '/' + safeName;
+      const { error } = await supabase.storage.from('group-materials').upload(storagePath, file, {
+        contentType: file.type || 'application/octet-stream', upsert: false
+      });
+      if (error) throw error;
+      uploadedPaths.push(storagePath);
+      payload.attachments.push({ name: file.name, size: file.size, contentType: file.type || 'application/octet-stream', storagePath });
+    }
+    payload.attachmentUrl = attachmentUrl;
     if (state.role === 'leader') {
       await addDoc(groupCollection('tasks'), {
         ...payload,
@@ -1992,6 +2021,7 @@ async function submitTask(form) {
     // Live Supabase updates publish the new task or proposal to all open clients.
     root.querySelector('#homework-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (error) {
+    if (uploadedPaths.length) await supabase.storage.from('group-materials').remove(uploadedPaths).catch(() => {});
     notify(error.message || 'Не удалось сохранить задание.', 'error');
   } finally {
     setBusy(false);
@@ -2013,7 +2043,9 @@ async function reviewSuggestion(suggestionId, approve) {
         transaction.set(taskRef, {
           subject: suggestion.subject || '',
           title: suggestion.title,
-          description: suggestion.description || '',
+          description: '',
+          attachments: suggestion.attachments || [],
+          attachmentUrl: suggestion.attachmentUrl || '',
           lessonDate: suggestion.lessonDate || null,
           lessonId: suggestion.lessonId || null,
           weekday: suggestion.weekday || null,
@@ -2186,6 +2218,16 @@ function bindEvents() {
     if (button.dataset.tab) { state.tab = button.dataset.tab; return renderWorkspace(); }
     if (button.dataset.action === 'logout') return doSignOut();
     if (button.dataset.action === 'menu') { document.querySelector('.sidebar')?.classList.toggle('open'); return; }
+
+    if (button.dataset.action === 'open-task-attachment') {
+      const task = state.tasks.find(item => item.id === button.dataset.taskId);
+      const file = task?.attachments?.[Number(button.dataset.attachmentIndex)];
+      if (!file?.storagePath) return notify('Файл не найден.', 'error');
+      const { data, error } = await supabase.storage.from('group-materials').createSignedUrl(file.storagePath, 60);
+      if (error) return notify(error.message || 'Не удалось открыть файл.', 'error');
+      window.open(data.signedUrl, '_blank', 'noopener');
+      return;
+    }
 
     if (button.dataset.action === 'open-lesson-homework') {
       state.selectedScheduleLessonId = button.dataset.id;
