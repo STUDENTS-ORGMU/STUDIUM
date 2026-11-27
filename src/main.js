@@ -764,7 +764,7 @@ function renderProfile() {
         '<p class="eyebrow">00 · АВАТАР</p><h2>Фотография профиля</h2>' +
         '<p class="muted">Загрузи изображение — оно будет видно участникам твоих групп.</p>' +
         '<div class="profile-avatar-editor">' +
-          (state.profile?.avatarPath ? '<img class="profile-avatar-preview" src="' + esc(supabase.storage.from("avatars").getPublicUrl(state.profile.avatarPath).data.publicUrl) + '" alt="Текущий аватар">' : '<span class="profile-avatar-preview profile-avatar-placeholder">' + esc(fullName.trim().split(/\\s+/).slice(0,2).map(part => part[0] || "").join("").toUpperCase() || "?") + '</span>') +
+          (state.profile?.avatarPath ? '<img class="profile-avatar-preview" src="' + esc(supabase.storage.from("avatars").getPublicUrl(state.profile.avatarPath).data.publicUrl) + '" alt="Текущий аватар">' : '<span class="profile-avatar-preview profile-avatar-placeholder">' + esc(fullName.trim().split(/\s+/).slice(0,2).map(part => part[0] || "").join("").toUpperCase() || "?") + '</span>') +
           '<label class="btn secondary profile-avatar-pick">Выбрать изображение<input id="profile-avatar-file" type="file" accept="image/png,image/jpeg,image/webp,image/avif" hidden></label>' +
         '</div><small class="muted">PNG, JPG, WebP или AVIF · до 5 МБ.</small>' +
       '</section>' +
@@ -1953,7 +1953,7 @@ function profilePermissionMessage(error) {
 
 async function uploadProfileAvatar(file) {
   if (!state.user?.id) return;
-  if (!/^image\\/(png|jpeg|webp|avif)$/.test(file.type) || file.size > 5 * 1024 * 1024) {
+  if (!/^image\/(png|jpeg|webp|avif)$/.test(file.type) || file.size > 5 * 1024 * 1024) {
     return notify('Выбери PNG, JPG, WebP или AVIF размером до 5 МБ.', 'error');
   }
   setBusy(true);
