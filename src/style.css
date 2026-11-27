@@ -1557,3 +1557,29 @@
   border-left:3px solid color-mix(in srgb,var(--ink) 28%,var(--paper)) !important;
   color:var(--ink);
 }
+
+
+/* Profile/account fields: use the active neutral dark palette, not legacy green */
+:root[data-theme-mode="dark"] .profile-settings-card .form input,
+:root[data-theme-mode="dark"] .profile-settings-card .form textarea,
+:root[data-theme-mode="dark"] .profile-settings-card .form select,
+:root[data-theme-mode="dark"] .profile-settings-card input,
+:root[data-theme-mode="dark"] .profile-settings-card textarea,
+:root[data-theme-mode="dark"] .profile-settings-card select{
+  background:var(--paper) !important;
+  color:var(--ink) !important;
+  border-color:var(--line) !important;
+  caret-color:var(--ink);
+}
+:root[data-theme-mode="dark"] .profile-settings-card input::placeholder,
+:root[data-theme-mode="dark"] .profile-settings-card textarea::placeholder{
+  color:var(--muted) !important;
+  opacity:1;
+}
+:root[data-theme-mode="dark"] .profile-settings-card input:-webkit-autofill,
+:root[data-theme-mode="dark"] .profile-settings-card input:-webkit-autofill:hover,
+:root[data-theme-mode="dark"] .profile-settings-card input:-webkit-autofill:focus{
+  -webkit-text-fill-color:var(--ink) !important;
+  box-shadow:0 0 0 1000px var(--paper) inset !important;
+  caret-color:var(--ink);
+}
