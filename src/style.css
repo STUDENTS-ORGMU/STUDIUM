@@ -1590,3 +1590,56 @@
   box-shadow:0 0 0 1000px var(--paper) inset !important;
   caret-color:var(--ink);
 }
+
+/* Mobile sidebar: keep the full menu and account controls inside the viewport */
+@media(max-width:680px){
+  .sidebar{
+    height:100vh;
+    height:100dvh;
+    min-height:0;
+    overflow:hidden;
+    padding:14px 14px 12px;
+    display:flex;
+    flex-direction:column;
+  }
+  .sidebar>.wordmark{flex:0 0 auto;padding:0 10px 14px;font-size:17px}
+  .group-box{flex:0 0 auto;margin:0 4px 13px;padding:10px 12px;gap:6px}
+  .group-box-heading small,.group-box small{font-size:8px}
+  .group-box strong{font-size:15px}
+  .group-box-meta span:first-child{padding:4px 8px;font-size:9px}
+  .group-box-meta span:last-child{font-size:9px}
+  .sidebar nav{
+    flex:1 1 auto;
+    min-height:0;
+    overflow:hidden;
+    justify-content:space-between;
+    gap:7px;
+  }
+  .nav-section{flex:0 0 auto;gap:1px}
+  .nav-section>small{padding:0 10px 3px;font-size:8px}
+  .sidebar nav button{min-height:clamp(29px,4.1vh,36px);padding:5px 9px;gap:9px}
+  .sidebar nav button .nav-label{font-size:11px}
+  .sidebar-icon{width:15px;height:15px;flex-basis:15px}
+  .side-user{
+    flex:0 0 auto;
+    margin-top:8px;
+    padding:9px 3px 0;
+    gap:5px;
+    grid-template-columns:30px minmax(0,1fr);
+  }
+  .side-user-profile{gap:7px;padding:2px}
+  .side-user-profile .avatar{width:30px;height:30px;flex-basis:30px}
+  .side-user-copy{gap:2px}
+  .side-user-copy strong{font-size:10px}
+  .side-user-copy small,.side-user-copy em{font-size:9px}
+  .side-user .btn{padding:7px 10px;margin-top:2px;font-size:11px}
+}
+@media(max-width:680px) and (max-height:740px){
+  .sidebar{padding-top:9px;padding-bottom:8px}
+  .sidebar>.wordmark{padding-bottom:9px}
+  .group-box{margin-bottom:8px;padding:8px 10px}
+  .sidebar nav{gap:4px}
+  .sidebar nav button{min-height:28px;padding:4px 8px}
+  .nav-section>small{padding-bottom:2px}
+  .side-user{margin-top:5px;padding-top:6px}
+}
