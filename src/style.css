@@ -1194,3 +1194,5 @@
 .profile-avatar-placeholder { display:grid; place-items:center; font-weight:700; color:var(--text, #26352d); font-size:22px; }
 .profile-avatar-pick { position:relative; overflow:hidden; cursor:pointer; }
 .group-member-avatar-image { object-fit:cover; display:block; }
+
+.side-user-avatar-image { width:36px; height:36px; min-width:36px; border-radius:50%; object-fit:cover; display:block; }
