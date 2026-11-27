@@ -59,6 +59,7 @@ const state = {
   attendanceRecords: [],
   materials: [],
   taskFiles: [],
+  editingSuggestionId: null,
   makeups: [],
   groupMembers: [],
   selectedAttendanceLessonId: null,
@@ -1015,7 +1016,13 @@ function renderModeration() {
   const reviewed = state.suggestions.filter(item => item.status !== 'pending');
   const weekdayNames = ['','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'];
   return heading('ПАНЕЛЬ СТАРОСТЫ', 'Модерация ДЗ', 'Проверь предложения студентов перед публикацией.') +
-    (pending.length ? '<div class="moderation">' + pending.map(item => '<article class="panel moderation-card"><div class="meta"><span>' + esc(item.subject || 'Без предмета') + '</span><span>Предложено ' + esc(dateText(item.createdAt)) + '</span></div><h2>' + esc(item.title) + '</h2><p>' + esc(item.description || '') + '</p><div class="meta"><span>Пара: ' + esc([weekdayNames[item.weekday] || '', dateText(item.lessonDate), item.lessonTime || ''].filter(Boolean).join(' · ')) + '</span></div><div class="actions"><button class="btn primary" data-review="approve" data-id="' + esc(item.id) + '">Одобрить и опубликовать</button><button class="btn danger" data-review="reject" data-id="' + esc(item.id) + '">Отклонить</button></div></article>').join('') + '</div>' : empty('Новых предложений нет', 'Когда студент предложит домашнее задание, оно появится здесь.')) +
+    (pending.length ? '<div class="moderation">' + pending.map(item => {
+      const editing = state.editingSuggestionId === item.id;
+      const editor = editing
+        ? '<form class="suggestion-edit-form" data-suggestion-edit="' + esc(item.id) + '"><label>Название задания<input name="title" required maxlength="180" value="' + esc(item.title || '') + '"></label><label>Ссылка на материал<input name="attachmentUrl" type="url" maxlength="2048" value="' + esc(item.attachmentUrl || '') + '" placeholder="https://..."></label><p class="muted">Прикреплённые файлы сохранятся без изменений.</p><div class="actions"><button class="btn primary" type="submit">Сохранить изменения</button><button class="btn" type="button" data-edit-cancel>Отмена</button></div></form>'
+        : '<div class="actions"><button class="btn" type="button" data-edit-suggestion="' + esc(item.id) + '">Изменить ДЗ</button><button class="btn primary" data-review="approve" data-id="' + esc(item.id) + '">Одобрить и опубликовать</button><button class="btn danger" data-review="reject" data-id="' + esc(item.id) + '">Отклонить</button></div>';
+      return '<article class="panel moderation-card" data-key="suggestion-' + esc(item.id) + '"><div class="meta"><span>' + esc(item.subject || 'Без предмета') + '</span><span>Предложено ' + esc(dateText(item.createdAt)) + '</span></div><h2>' + esc(item.title) + '</h2>' + (item.attachments?.length ? '<div class="task-attachments">' + item.attachments.map(file => '<span class="task-attachment-link">↧ ' + esc(file.name || 'Файл') + '</span>').join('') + '</div>' : '') + (item.attachmentUrl ? '<p><a class="task-attachment-link" href="' + esc(item.attachmentUrl) + '" target="_blank" rel="noopener noreferrer">↗ Открыть ссылку</a></p>' : '') + '<div class="meta"><span>Пара: ' + esc([weekdayNames[item.weekday] || '', dateText(item.lessonDate), item.lessonTime || ''].filter(Boolean).join(' · ')) + '</span></div>' + editor + '</article>';
+    }).join('') + '</div>' : empty('Новых предложений нет', 'Когда студент предложит домашнее задание, оно появится здесь.')) +
     (reviewed.length ? '<section class="section"><h2>Рассмотренные предложения</h2><div class="history">' + reviewed.slice(0,8).map(item => '<div><span>' + esc(item.title) + '</span><span class="status ' + item.status + '">' + (item.status === 'approved' ? 'Опубликовано' : 'Отклонено') + '</span></div>').join('') + '</div></section>' : '');
 }
 
@@ -2089,6 +2096,31 @@ async function submitTask(form) {
   }
 }
 
+async function saveSuggestionEdits(form) {
+  const suggestionId = form.dataset.suggestionEdit;
+  const title = String(new FormData(form).get('title') || '').trim();
+  const rawUrl = String(new FormData(form).get('attachmentUrl') || '').trim();
+  if (!title) return notify('Укажи название задания.', 'error');
+  let attachmentUrl = '';
+  if (rawUrl) {
+    try {
+      const parsed = new URL(rawUrl);
+      if (!['https:', 'http:'].includes(parsed.protocol)) throw new Error();
+      attachmentUrl = parsed.href;
+    } catch { return notify('Укажи корректную ссылку с https:// или http://.', 'error'); }
+  }
+  setBusy(true);
+  try {
+    await updateDoc(groupDocument('taskSuggestions', suggestionId), {
+      title, attachmentUrl, updatedAt: serverTimestamp()
+    });
+    state.editingSuggestionId = null;
+    notify('Предложение обновлено.', 'success');
+  } catch (error) {
+    notify(error.message || 'Не удалось сохранить изменения.', 'error');
+  } finally { setBusy(false); }
+}
+
 async function reviewSuggestion(suggestionId, approve) {
   setBusy(true);
   try {
@@ -2401,6 +2433,8 @@ function bindEvents() {
       catch { notify('Код приглашения: ' + state.activeMembership.inviteCode); }
       return;
     }
+    if (button.dataset.editSuggestion) { state.editingSuggestionId = button.dataset.editSuggestion; return render(); }
+    if (button.hasAttribute('data-edit-cancel')) { state.editingSuggestionId = null; return render(); }
     if (button.dataset.review) return reviewSuggestion(button.dataset.id, button.dataset.review === 'approve');
   });
 
@@ -2415,6 +2449,7 @@ function bindEvents() {
     if (form.id === 'password-form') return savePassword(form);
     if (form.id === 'create-group') return createGroup(form);
     if (form.id === 'join-group') return joinGroup(form);
+    if (form.matches('[data-suggestion-edit]')) return saveSuggestionEdits(form);
     if (form.id === 'task-form') return submitTask(form);
     if (form.id === 'lesson-form') return submitLesson(form);
     if (form.id === 'cycle-form') return saveCycle(form);
