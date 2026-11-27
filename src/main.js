@@ -58,6 +58,7 @@ const state = {
   attendance: [],
   attendanceRecords: [],
   materials: [],
+  taskFiles: [],
   makeups: [],
   groupMembers: [],
   selectedAttendanceLessonId: null,
@@ -958,10 +959,22 @@ function taskForm(lesson) {
     '<input type="hidden" name="weekNumber" value="' + Number(lesson.weekNumber) + '">' +
     '<input type="hidden" name="lessonTime" value="' + esc(lesson.startsAt || '') + '">' +
     '<label>Название задания<input name="title" required maxlength="180" placeholder="Что нужно сделать?"></label>' +
-    '<div class="task-attachments-fields"><label>Файлы <span class="muted">(можно несколько)</span><input type="file" name="attachments" multiple accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.rtf,.jpg,.jpeg,.png,.webp,.zip"></label>' +
+    '<div class="task-attachments-fields"><label>Файлы <span class="muted">(можно добавлять по очереди)</span><input type="file" name="attachments" multiple accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.rtf,.jpg,.jpeg,.png,.webp,.zip"></label>' +
+    '<div class="task-selected-files" id="task-selected-files">' + renderSelectedTaskFiles() + '</div>' +
     '<label>Ссылка <span class="muted">(необязательно)</span><input type="url" name="attachmentUrl" maxlength="2048" placeholder="https://..."></label></div>' +
     '<button class="btn primary" type="submit">' + (state.role === 'leader' ? 'Опубликовать' : 'Отправить старосте') + '</button>' +
     '</form></section>';
+}
+
+function renderSelectedTaskFiles() {
+  const files = state.taskFiles || [];
+  if (!files.length) return '<p class="task-files-empty">Файлы ещё не добавлены</p>';
+  return '<div class="task-files-list">' + files.map((file,index) => '<div class="task-file-chip"><span class="task-file-symbol" aria-hidden="true">↗</span><span class="task-file-name" title="' + esc(file.name) + '">' + esc(file.name) + '<small>' + (file.size < 1024*1024 ? (file.size/1024).toFixed(0)+' КБ' : (file.size/1024/1024).toFixed(1)+' МБ') + '</small></span><button type="button" class="task-file-remove" data-action="remove-task-file" data-index="' + index + '" aria-label="Убрать файл ' + esc(file.name) + '">×</button></div>').join('') + '</div>';
+}
+
+function updateSelectedTaskFiles() {
+  const container = root.querySelector('#task-selected-files');
+  if (container) container.innerHTML = renderSelectedTaskFiles();
 }
 
 function renderHomeworkPanel() {
@@ -2026,7 +2039,7 @@ async function submitTask(form) {
       attachmentUrl = parsed.href;
     } catch { notify('Укажи корректную ссылку с https:// или http://.', 'error'); return; }
   }
-  const files = Array.from(form.querySelector('[name="attachments"]')?.files || []);
+  const files = [...(state.taskFiles || [])];
   if (files.length > 10) return notify('Можно прикрепить не более 10 файлов.', 'error');
   if (files.some(file => file.size > 20 * 1024 * 1024)) return notify('Размер каждого файла не должен превышать 20 МБ.', 'error');
   setBusy(true);
@@ -2063,6 +2076,8 @@ async function submitTask(form) {
       notify('Предложение отправлено старосте.', 'success');
     }
     form.reset();
+    state.taskFiles = [];
+    updateSelectedTaskFiles();
     state.selectedScheduleLessonId = lesson.id;
     // Live Supabase updates publish the new task or proposal to all open clients.
     root.querySelector('#homework-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -2313,6 +2328,11 @@ function bindEvents() {
     }
 
     if (button.dataset.action === 'delete-task') return deleteTask(button.dataset.id);
+    if (button.dataset.action === 'remove-task-file') {
+      state.taskFiles.splice(Number(button.dataset.index), 1);
+      updateSelectedTaskFiles();
+      return;
+    }
     if (button.dataset.action === 'download-material') return openGroupMaterial(button.dataset.id);
     if (button.dataset.action === 'delete-material') return deleteGroupMaterial(button.dataset.id);
     if (button.dataset.action === 'delete-makeup') return deleteMakeup(button.dataset.id);
@@ -2404,6 +2424,21 @@ function bindEvents() {
   });
 
   root.addEventListener('change', async event => {
+    if (event.target.matches('#task-form [name="attachments"]')) {
+      const picked = Array.from(event.target.files || []);
+      const current = state.taskFiles || (state.taskFiles = []);
+      for (const file of picked) {
+        const duplicate = current.some(item => item.name === file.name && item.size === file.size && item.lastModified === file.lastModified);
+        if (!duplicate) current.push(file);
+      }
+      event.target.value = '';
+      if (current.length > 10) {
+        current.splice(10);
+        notify('Можно прикрепить не более 10 файлов.', 'error');
+      }
+      updateSelectedTaskFiles();
+      return;
+    }
     if (state.busy) return;
     if (event.target.matches('[data-progress]')) return updateProgress(event.target);
     if (event.target.id === 'attendance-date' && event.target.value) {
