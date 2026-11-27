@@ -1532,3 +1532,28 @@
   object-position:center;
   border-radius:50%;
 }
+
+
+/* Keep lecture cards visibly distinct in dark mode while following the chosen palette */
+:root[data-theme-mode="dark"] .schedule-lesson.lecture-lesson{
+  background:color-mix(in srgb,var(--theme-accent) 34%,var(--paper)) !important;
+  border:1px solid color-mix(in srgb,var(--theme-accent) 62%,var(--line)) !important;
+  border-left:4px solid var(--theme-accent) !important;
+  color:var(--ink);
+  box-shadow:0 2px 8px #0002;
+}
+:root[data-theme-mode="dark"] .schedule-lesson.lecture-lesson:hover{
+  background:color-mix(in srgb,var(--theme-accent) 44%,var(--paper)) !important;
+  border-color:var(--theme-accent) !important;
+}
+:root[data-theme-mode="dark"] .schedule-lesson.lecture-lesson .schedule-lesson-type-label{
+  background:var(--theme-accent) !important;
+  border-color:var(--theme-accent) !important;
+  color:#fff !important;
+}
+:root[data-theme-mode="dark"] .schedule-lesson.seminar-lesson{
+  background:var(--theme-seminar,var(--paper)) !important;
+  border:1px solid var(--line) !important;
+  border-left:3px solid color-mix(in srgb,var(--ink) 28%,var(--paper)) !important;
+  color:var(--ink);
+}
