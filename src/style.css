@@ -1008,3 +1008,98 @@
 .suggestion-edit-files .task-file-name{overflow-wrap:anywhere}
 .suggestion-file-picker{grid-column:1/-1;display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px dashed var(--line);border-radius:10px;background:var(--paper);cursor:pointer}
 .suggestion-file-picker input{border:0;padding:0;background:transparent}
+
+
+/* Refined leader homework editor attachment area */
+.suggestion-edit-form{
+  gap:14px;
+  padding:20px;
+  border-radius:16px;
+  background:var(--soft);
+}
+.suggestion-edit-form > label:not(.suggestion-file-picker){
+  gap:8px;
+  color:var(--ink);
+  font-size:13px;
+}
+.suggestion-edit-form > label:not(.suggestion-file-picker) input{
+  min-height:46px;
+  padding:10px 13px;
+  border-radius:11px;
+  font-size:14px;
+}
+.suggestion-file-picker{
+  grid-column:1/-1;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:9px;
+  min-height:112px;
+  padding:18px;
+  border:1px dashed color-mix(in srgb,var(--theme-accent) 38%,var(--line));
+  border-radius:13px;
+  background:color-mix(in srgb,var(--paper) 72%,var(--soft));
+  color:var(--ink)!important;
+  font-size:13px!important;
+  font-weight:700!important;
+  text-align:center;
+  cursor:pointer;
+  transition:border-color .18s ease,background .18s ease;
+}
+.suggestion-file-picker:hover{
+  border-color:var(--theme-accent);
+  background:var(--paper);
+}
+.suggestion-file-picker input[type="file"]{
+  display:block;
+  width:auto;
+  max-width:100%;
+  min-width:0;
+  padding:0;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  color:var(--muted);
+  font:500 12px/1.4 inherit;
+  cursor:pointer;
+}
+.suggestion-file-picker input[type="file"]::file-selector-button{
+  margin-right:9px;
+  padding:8px 13px;
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:var(--paper);
+  color:var(--ink);
+  font:650 12px inherit;
+  cursor:pointer;
+}
+.suggestion-edit-files{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));
+  gap:8px;
+  grid-column:1/-1;
+}
+.suggestion-edit-files .task-file-chip{
+  width:100%;
+  max-width:none;
+  min-height:48px;
+  padding:8px 10px;
+  border-radius:10px;
+  background:var(--paper);
+}
+.suggestion-edit-files .task-file-name{
+  flex:1;
+  max-width:none;
+  font-size:12px;
+}
+.suggestion-edit-files .task-file-remove{
+  flex:0 0 26px;
+  width:26px;
+  height:26px;
+}
+@media(max-width:680px){
+  .suggestion-edit-form{padding:13px}
+  .suggestion-file-picker{min-height:96px;padding:13px}
+  .suggestion-edit-files{grid-template-columns:1fr}
+}
