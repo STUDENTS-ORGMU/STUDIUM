@@ -1183,3 +1183,4 @@
 .group-member-special-section{margin-top:18px;padding-top:16px;border-top:1px dashed var(--line)}
 .group-member-row-special{border-color:#b8cbbd;background:#fbfdfb}
 .group-member-role.swamp-runner{background:#e7efe8;color:#385744;font-weight:700}
+\n.group-member-avatar-image{display:block;object-fit:cover;overflow:hidden}\n
