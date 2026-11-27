@@ -25,14 +25,3 @@ drop policy if exists "Users can delete own avatar objects" on storage.objects;
 create policy "Users can delete own avatar objects"
 on storage.objects for delete to authenticated
 using (bucket_id = 'avatars' and (storage.foldername(name))[1] = (select auth.uid())::text);
-
-create schema if not exists private;
-create table if not exists private.studium_avatar_assets (
-  id text primary key,
-  content_base64 text not null,
-  content_type text not null default 'image/webp',
-  created_at timestamptz not null default now()
-);
-alter table private.studium_avatar_assets enable row level security;
-revoke all on private.studium_avatar_assets from public, anon, authenticated;
-grant all on private.studium_avatar_assets to service_role;
