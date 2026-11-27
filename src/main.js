@@ -1437,7 +1437,7 @@ function renderStudentAttendance(lessons, date) {
       '<div class="attendance-subparts">' + partCards + '</div></article>';
   }).join('');
   return '<section class="student-attendance-page"><header class="student-attendance-header"><div><h1>' + esc(profileName) + '</h1><p>' + esc(dateLabel) + ', ' + esc(weekdayLabel) + '</p></div>' +
-    '<div class="student-attendance-date"><label for="attendance-date">Дата</label><input type="date" id="attendance-date" value="' + date + '"></div></header>' +
+    '<div class="student-attendance-date"><span>Отметки доступны только в день занятий</span></div></header>' +
     '<p class="student-attendance-caption">Отметь, будешь ли ты на занятиях. У двойной пары можно ответить отдельно по каждой части. Староста увидит твои ответы.</p>' + quick +
     (lessons.length ? '<div class="student-attendance-lessons">' + cards + '</div>' : empty('На эту дату пар нет', 'Выбери другую дату или проверь расписание группы.')) +
     '</section>';
@@ -1503,7 +1503,8 @@ async function exportAttendanceReport(month) {
 }
 
 function renderAttendance() {
-  const date = state.attendanceDate;
+  const date = state.role === 'leader' ? state.attendanceDate : today();
+  if (state.role !== 'leader') state.attendanceDate = date;
   const [y,m,d] = date.split('-').map(Number);
   const weekday = ((new Date(Date.UTC(y,m-1,d)).getUTCDay()+6)%7)+1;
   const week = lessonWeekFor(date);
@@ -1548,6 +1549,10 @@ function renderAttendance() {
 }
 
 async function saveAttendance(lessonId, response, partKey = null) {
+  if (state.attendanceDate !== today()) {
+    notify('Отмечаться можно только в день проведения пары.', 'error');
+    return;
+  }
   setBusy(true);
   try {
     const { error } = await supabase.rpc('save_my_attendance_response', {
