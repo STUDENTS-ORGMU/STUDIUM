@@ -974,7 +974,7 @@ function scheduleLessonCard(lesson, startIndex, span) {
     '<span>' + period.start + '–' + period.end + (span > 1 ? ' · ' + period.label : '') + '</span>'
   ).join('');
   const selected = state.selectedScheduleLessonId === lesson.id;
-  return '<article class="schedule-lesson' + (span > 1 ? ' double-period' : '') + (selected ? ' selected-lesson' : '') +
+  return '<article class="schedule-lesson ' + (lesson.lessonType === 'lecture' ? 'lecture-lesson' : 'seminar-lesson') + (span > 1 ? ' double-period' : '') + (selected ? ' selected-lesson' : '') +
     '" style="grid-row:span ' + span + '" data-schedule-lesson data-id="' + esc(lesson.id) +
     '" role="button" tabindex="0" aria-pressed="' + selected + '" aria-label="Показать задания: ' + esc(lesson.subject) + '">' +
     '<div class="schedule-times">' + times + '</div>' +
