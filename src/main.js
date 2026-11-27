@@ -436,7 +436,7 @@ async function loadWorkspace() {
     const { data: avatarProfiles, error: avatarProfilesError } = await supabase.from('profiles').select('id, avatar_path').in('id', memberIds);
     if (avatarProfilesError) throw avatarProfilesError;
     const avatarByUser = new Map((avatarProfiles || []).map(profile => [profile.id, profile.avatar_path]));
-    state.groupMembers = memberRows.map(member => ({ ...member, avatarPath: avatarByUser.get(member.id) || null }));
+    state.groupMembers = memberRows.map(member => ({ ...member, avatarPath: member.avatarPath || avatarByUser.get(member.id) || null }));
   } else state.groupMembers = memberRows;
   state.attendanceRecords = attendanceRecords.docs.map(item => ({ id: item.id, ...item.data() }));
   state.materials = materials.docs.map(item => ({ id: item.id, ...item.data() }));
@@ -1868,6 +1868,7 @@ function renderManage() {
       '<div class="group-member-name"><strong>' + esc(name) + (isCurrent ? ' <span class="group-you-label">Это вы</span>' : '') + '</strong>' +
       '<small>' + memberLabel + '</small></div>' +
       (isLeader ? '<span class="group-member-role">Староста</span>' : '<span class="group-member-role student' + (special ? ' swamp-runner' : '') + '">' + memberLabel + '</span>') +
+      (leader && !isLeader && !isCurrent ? '<label class="btn ghost group-member-avatar-upload">' + (member.avatarPath ? 'Изменить фото' : 'Добавить фото') + '<input type="file" accept="image/png,image/jpeg,image/webp,image/avif" data-avatar-for="' + esc(member.id) + '" hidden></label>' : '') +
       (leader && !isLeader && !isCurrent ? '<button type="button" class="btn ghost group-member-remove" data-action="remove-group-member" data-user-id="' + esc(member.id) + '" data-user-name="' + esc(name) + '" aria-label="Удалить ' + esc(name) + ' из группы">Удалить</button>' : '') +
       '</article>';
   };
@@ -1977,6 +1978,32 @@ async function uploadProfileAvatar(file) {
     renderWorkspace();
   } catch (error) {
     notify(error.message || 'Не удалось загрузить аватар.', 'error');
+  } finally { setBusy(false); }
+}
+
+async function uploadMemberAvatar(file, userId) {
+  if (state.role !== 'leader' || !state.group?.id || !userId || userId === state.user?.id) return;
+  if (!/^image\/(png|jpeg|webp|avif)$/.test(file.type) || file.size > 5 * 1024 * 1024) {
+    return notify('Выбери PNG, JPG, WebP или AVIF размером до 5 МБ.', 'error');
+  }
+  setBusy(true);
+  let uploadedPath = null;
+  try {
+    const ext = ({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/avif': 'avif' })[file.type];
+    uploadedPath = state.group.id + '/' + userId + '/' + crypto.randomUUID() + '.' + ext;
+    const { error: uploadError } = await supabase.storage.from('avatars').upload(uploadedPath, file, {
+      cacheControl: '3600', upsert: false, contentType: file.type
+    });
+    if (uploadError) throw uploadError;
+    const { error: updateError } = await supabase.from('group_members')
+      .update({ avatar_path: uploadedPath }).eq('group_id', state.group.id).eq('user_id', userId);
+    if (updateError) throw updateError;
+    state.groupMembers = state.groupMembers.map(member => member.id === userId ? { ...member, avatarPath: uploadedPath } : member);
+    notify('Аватар студента сохранён в Supabase.', 'success');
+    renderWorkspace();
+  } catch (error) {
+    if (uploadedPath) await supabase.storage.from('avatars').remove([uploadedPath]);
+    notify(error.message || 'Не удалось загрузить аватар студента.', 'error');
   } finally { setBusy(false); }
 }
 
@@ -2577,6 +2604,12 @@ function bindEvents() {
   });
 
   root.addEventListener('change', async event => {
+    if (event.target.dataset.avatarFor) {
+      const file = event.target.files?.[0];
+      const userId = event.target.dataset.avatarFor;
+      event.target.value = '';
+      if (file) return uploadMemberAvatar(file, userId);
+    }
     if (event.target.id === 'profile-avatar-file') {
       const file = event.target.files?.[0];
       event.target.value = '';
