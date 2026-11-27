@@ -1199,3 +1199,134 @@
 
 .group-member-avatar-upload { cursor:pointer; white-space:nowrap; }
 .group-member-avatar-upload input { display:none; }
+
+
+/* Independent dark appearance mode — palette selection remains separate */
+:root[data-theme-mode="dark"]{
+  color-scheme:dark;
+  --ink:#edf2ee;
+  --muted:#a0ada5;
+  --line:#35443a;
+  --paper:#1d2821;
+  --bg:#111914;
+  --soft:#27352c;
+  --theme-lecture:#2b3c31;
+  --theme-seminar:#202d25;
+}
+:root[data-theme-mode="dark"] body{background:var(--bg);color:var(--ink)}
+:root[data-theme-mode="dark"] .sidebar,
+:root[data-theme-mode="dark"] .mobile-head,
+:root[data-theme-mode="dark"] .group-box,
+:root[data-theme-mode="dark"] .panel,
+:root[data-theme-mode="dark"] .stats article,
+:root[data-theme-mode="dark"] .task-card,
+:root[data-theme-mode="dark"] .moderation-card,
+:root[data-theme-mode="dark"] .history>div,
+:root[data-theme-mode="dark"] .lesson,
+:root[data-theme-mode="dark"] .attendance-register,
+:root[data-theme-mode="dark"] .attendance-lesson-card,
+:root[data-theme-mode="dark"] .attendance-report-toolbar,
+:root[data-theme-mode="dark"] .attendance-person-row,
+:root[data-theme-mode="dark"] .attendance-subpart,
+:root[data-theme-mode="dark"] .attendance-part-tab,
+:root[data-theme-mode="dark"] .schedule-day,
+:root[data-theme-mode="dark"] .schedule-week-card,
+:root[data-theme-mode="dark"] .schedule-empty-slot,
+:root[data-theme-mode="dark"] .schedule-summary article,
+:root[data-theme-mode="dark"] .schedule-editor,
+:root[data-theme-mode="dark"] .schedule-cell-editor,
+:root[data-theme-mode="dark"] .schedule-lesson.seminar-lesson,
+:root[data-theme-mode="dark"] .schedule-lesson.lecture-lesson,
+:root[data-theme-mode="dark"] .empty,
+:root[data-theme-mode="dark"] .invite+.panel{
+  background:var(--paper);color:var(--ink);border-color:var(--line);
+}
+:root[data-theme-mode="dark"] .sidebar{border-right-color:var(--line)}
+:root[data-theme-mode="dark"] .sidebar nav button{color:var(--muted)}
+:root[data-theme-mode="dark"] .sidebar nav button:hover{background:var(--soft);color:var(--ink)}
+:root[data-theme-mode="dark"] .sidebar nav button.active{background:var(--theme-accent);color:#fff}
+:root[data-theme-mode="dark"] .sidebar nav button.active .sidebar-icon{color:#fff}
+:root[data-theme-mode="dark"] .group-box strong,
+:root[data-theme-mode="dark"] .side-user strong,
+:root[data-theme-mode="dark"] .task-copy h3,
+:root[data-theme-mode="dark"] .section-title h2,
+:root[data-theme-mode="dark"] .section>h2,
+:root[data-theme-mode="dark"] .panel h2,
+:root[data-theme-mode="dark"] .attendance-register-head h2,
+:root[data-theme-mode="dark"] .attendance-person-info>strong,
+:root[data-theme-mode="dark"] .attendance-subpart-heading strong,
+:root[data-theme-mode="dark"] .schedule-lesson strong,
+:root[data-theme-mode="dark"] .schedule-summary article strong{color:var(--ink)}
+:root[data-theme-mode="dark"] .eyebrow,
+:root[data-theme-mode="dark"] .stats small,
+:root[data-theme-mode="dark"] .task-copy p,
+:root[data-theme-mode="dark"] .lesson small,
+:root[data-theme-mode="dark"] .lesson p,
+:root[data-theme-mode="dark"] .schedule-times,
+:root[data-theme-mode="dark"] .schedule-room,
+:root[data-theme-mode="dark"] .schedule-description,
+:root[data-theme-mode="dark"] .attendance-register-head .muted{color:var(--muted)}
+:root[data-theme-mode="dark"] .btn.primary{background:var(--theme-accent);border-color:var(--theme-accent);color:#fff}
+:root[data-theme-mode="dark"] .btn.secondary,
+:root[data-theme-mode="dark"] .btn.ghost{background:var(--paper);border-color:var(--line);color:var(--ink)}
+:root[data-theme-mode="dark"] .form input,
+:root[data-theme-mode="dark"] .form textarea,
+:root[data-theme-mode="dark"] .form select,
+:root[data-theme-mode="dark"] .field-label select,
+:root[data-theme-mode="dark"] .date-picker input,
+:root[data-theme-mode="dark"] .roster-official select,
+:root[data-theme-mode="dark"] .schedule-inline-form input,
+:root[data-theme-mode="dark"] .schedule-inline-form select,
+:root[data-theme-mode="dark"] .student-attendance-date input{
+  background:#121b16;color:var(--ink);border-color:var(--line);
+}
+:root[data-theme-mode="dark"] .form input::placeholder,
+:root[data-theme-mode="dark"] .form textarea::placeholder{color:#78877d}
+:root[data-theme-mode="dark"] .switch{background:var(--soft)}
+:root[data-theme-mode="dark"] .switch button{color:var(--muted)}
+:root[data-theme-mode="dark"] .switch button.active{background:var(--paper);color:var(--ink)}
+:root[data-theme-mode="dark"] .nav-section>small,
+:root[data-theme-mode="dark"] .group-box-meta span:last-child,
+:root[data-theme-mode="dark"] .side-user small{color:var(--muted)}
+:root[data-theme-mode="dark"] .group-box-meta span:first-child,
+:root[data-theme-mode="dark"] .avatar,
+:root[data-theme-mode="dark"] .roster-number,
+:root[data-theme-mode="dark"] .roster-role,
+:root[data-theme-mode="dark"] .attendance-summary span,
+:root[data-theme-mode="dark"] .attendance-response.no-response{background:var(--soft);color:var(--muted)}
+:root[data-theme-mode="dark"] .nav-section button b{background:var(--theme-accent);color:#fff}
+:root[data-theme-mode="dark"] .schedule-day.is-today,
+:root[data-theme-mode="dark"] .schedule-day.is-tomorrow,
+:root[data-theme-mode="dark"] .schedule-summary .today-highlight,
+:root[data-theme-mode="dark"] .schedule-summary .tomorrow-highlight,
+:root[data-theme-mode="dark"] .schedule-lesson.selected-lesson{background:color-mix(in srgb,var(--theme-accent) 20%,var(--paper));border-color:var(--theme-accent)}
+:root[data-theme-mode="dark"] .schedule-lesson .schedule-lesson-type-label{background:var(--soft);border-color:var(--line);color:var(--ink)}
+:root[data-theme-mode="dark"] .schedule-lesson.lecture-lesson .schedule-lesson-type-label{background:var(--theme-accent);border-color:var(--theme-accent);color:#fff}
+:root[data-theme-mode="dark"] .schedule-add-trigger{background:var(--soft);border-color:var(--line);color:var(--ink)}
+:root[data-theme-mode="dark"] .schedule-inline-form label,
+:root[data-theme-mode="dark"] .schedule-cell-editor-top{color:var(--muted)}
+:root[data-theme-mode="dark"] .attendance-lesson-card.selected,
+:root[data-theme-mode="dark"] .attendance-part-tab.active{background:color-mix(in srgb,var(--theme-accent) 20%,var(--paper));border-color:var(--theme-accent);color:var(--ink)}
+:root[data-theme-mode="dark"] .attendance-response.will-attend{background:#173b27;color:#a9ecc0}
+:root[data-theme-mode="dark"] .attendance-response.will-miss{background:#48211f;color:#ffc6c0}
+:root[data-theme-mode="dark"] .roster-excuse-btn{background:#173b27;border-color:#315d40;color:#b9e8c7}
+:root[data-theme-mode="dark"] .empty{border-color:var(--line)}
+:root[data-theme-mode="dark"] .appearance-mode{display:flex;align-items:center;justify-content:space-between;gap:18px;margin:18px 0 26px;padding:20px}
+.appearance-mode>div:first-child{display:flex;flex-direction:column;gap:5px}
+.appearance-mode>div:first-child strong{font:700 16px Manrope,sans-serif;color:var(--ink)}
+.appearance-mode>div:first-child small{font-size:11px;color:var(--muted)}
+.appearance-mode .eyebrow{margin:0}
+.appearance-mode-switch{display:flex;gap:6px;padding:4px;border-radius:999px;background:var(--soft);flex-shrink:0}
+.appearance-mode-switch button{border:0;border-radius:999px;background:transparent;color:var(--muted);padding:9px 14px;font-size:12px;font-weight:700}
+.appearance-mode-switch button.active{background:var(--paper);color:var(--ink);box-shadow:0 2px 8px #00000012}
+.theme-palette-label{margin-top:10px}
+:root[data-theme-mode="dark"] .appearance-mode-switch button.active{background:#34463a;color:#f2f6f3}
+:root[data-theme-mode="dark"] .theme-option{background:var(--paper);border-color:var(--line);color:var(--ink)}
+:root[data-theme-mode="dark"] .theme-option.active{border-color:var(--theme-accent);box-shadow:0 3px 12px #0004}
+:root[data-theme-mode="dark"] .theme-check{background:var(--theme-accent);color:#fff}
+:root[data-theme-mode="dark"] .profile-avatar-preview{border-color:var(--line)}
+@media(max-width:680px){
+  .appearance-mode{align-items:stretch;flex-direction:column}
+  .appearance-mode-switch{width:100%}
+  .appearance-mode-switch button{flex:1}
+}
