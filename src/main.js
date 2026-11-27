@@ -58,6 +58,7 @@ const state = {
   attendance: [],
   attendanceRecords: [],
   materials: [],
+  makeups: [],
   groupMembers: [],
   selectedAttendanceLessonId: null,
   selectedAttendancePartKey: null,
@@ -386,6 +387,7 @@ async function loadWorkspace() {
   const progressRef = collection(db, 'groups', gid, 'taskProgress');
   const attendanceRef = collection(db, 'groups', gid, 'attendanceResponses');
   const materialsRef = collection(db, 'groups', gid, 'materials');
+  const makeupsRef = collection(db, 'groups', gid, 'makeups');
 
   const taskQuery = query(tasksRef, orderBy('lessonDate', 'asc'));
   const lessonQuery = query(lessonsRef, orderBy('weekday', 'asc'), orderBy('weekNumber', 'asc'), orderBy('startsAt', 'asc'));
@@ -412,7 +414,7 @@ async function loadWorkspace() {
       throw error;
     }
   };
-  const [tasks, suggestions, lessons, progress, attendance, members, attendanceRecords, materials] = await Promise.all([
+  const [tasks, suggestions, lessons, progress, attendance, members, attendanceRecords, materials, makeups] = await Promise.all([
     readQuery('Домашние задания', getDocs(taskQuery)),
     readQuery('Предложения ДЗ', getDocs(suggestionQuery)),
     readQuery('Расписание', getDocs(lessonQuery)),
@@ -420,7 +422,8 @@ async function loadWorkspace() {
     readQuery('Предварительная посещаемость', getDocs(attendanceQuery)),
     readQuery('Список участников группы', groupMembersQuery),
     readQuery('Официальная посещаемость', officialAttendanceQuery),
-    readQuery('Материалы группы', getDocs(materialsQuery))
+    readQuery('Материалы группы', getDocs(materialsQuery)),
+    readQuery('График отработок', getDocs(query(makeupsRef, orderBy('date', 'asc'))))
   ]);
 
   state.tasks = tasks.docs.map(item => ({ id: item.id, ...item.data() }))
@@ -432,6 +435,7 @@ async function loadWorkspace() {
   state.groupMembers = members.docs.map(item => ({ id: item.id, ...item.data() }));
   state.attendanceRecords = attendanceRecords.docs.map(item => ({ id: item.id, ...item.data() }));
   state.materials = materials.docs.map(item => ({ id: item.id, ...item.data() }));
+  state.makeups = makeups.docs.map(item => ({ id: item.id, ...item.data() }));
 }
 
 function sidebarIcon(name) {
@@ -442,6 +446,7 @@ function sidebarIcon(name) {
     moderation: '<path d="M9 12l2 2 4-4"/><path d="M12 3 4 6v5c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6z"/>',
     attendance: '<path d="M4 19V5M4 19h16"/><path d="M8 15v-4M12 15V7M16 15V9"/>',
     library: '<path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v18H6.5A2.5 2.5 0 0 1 4 17.5z"/><path d="M4 6h16M8 10h8M8 14h8"/>',
+    makeups: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M7 15l2 2 5-5"/>',
     manage: '<circle cx="9" cy="8" r="3"/><path d="M3.5 19v-1.2a5.5 5.5 0 0 1 11 0V19z"/><circle cx="17" cy="9" r="2.4"/><path d="M16.5 14.2a4.5 4.5 0 0 1 4 4.5v.3h-3.2"/>',
     appearance: '<path d="M12 3a9 9 0 1 0 0 18h1.2a2 2 0 0 0 1.5-3.3 1.5 1.5 0 0 1 1.1-2.5H18a3 3 0 0 0 3-3c0-5.1-4-9.2-9-9.2Z"/><circle cx="7.5" cy="10" r="1"/><circle cx="11" cy="7" r="1"/><circle cx="16" cy="8.5" r="1"/>'
   };
@@ -464,6 +469,7 @@ function renderWorkspace() {
     ...(leader ? [navButton('moderation', 'moderation', 'Модерация <b>' + state.suggestions.filter(item => item.status === 'pending').length + '</b>')] : []),
     navButton('attendance', 'attendance', 'Посещаемость'),
     navButton('library', 'library', 'Материалы'),
+    navButton('makeups', 'makeups', 'Отработки'),
     navButton('manage', 'manage', 'Группа')
   ].join('');
   const settingsTab = navButton('appearance', 'appearance', 'Оформление');
@@ -662,6 +668,44 @@ async function deleteGroupMaterial(materialId) {
   }
 }
 
+function renderMakeups() {
+  const rows = [...(state.makeups || [])].sort((a,b) => String(a.date || '').localeCompare(String(b.date || '')) || String(a.time || '').localeCompare(String(b.time || '')));
+  const dateLabel = value => value ? new Date(value + 'T00:00:00').toLocaleDateString('ru-RU', { day:'numeric', month:'long', year:'numeric' }) : 'Дата не указана';
+  const cards = rows.length ? '<div class="makeup-list">' + rows.map(item => '<article class="panel makeup-card"><div class="makeup-date-art" aria-hidden="true"><span>' + esc(item.date ? item.date.slice(8,10) : '—') + '</span><small>' + esc(item.date ? new Date(item.date + 'T00:00:00').toLocaleDateString('ru-RU',{month:'short'}) : '') + '</small></div><div class="makeup-info"><p class="eyebrow">' + esc(dateLabel(item.date)) + (item.time ? ' · ' + esc(item.time) : '') + '</p><h3>' + esc(item.subject || 'Отработка') + '</h3><p class="muted">' + esc([item.location, item.note].filter(Boolean).join(' · ') || 'Время и место уточняются') + '</p></div>' + (state.role === 'leader' ? '<button class="btn ghost makeup-delete" data-action="delete-makeup" data-id="' + esc(item.id) + '" aria-label="Удалить отработку">×</button>' : '') + '</article>').join('') + '</div>' : empty('Пока нет назначенных отработок', state.role === 'leader' ? 'Добавь дату и время — график появится здесь у всей группы.' : 'Староста добавит сюда дату, время и место отработки.');
+  const form = state.role === 'leader' ? '<form id="makeup-form" class="panel makeup-form"><p class="eyebrow">НОВАЯ ОТРАБОТКА</p><h2>Добавить в график</h2><div class="form-grid"><label>Предмет<input name="subject" required maxlength="100" placeholder="Например, Анатомия"></label><label>Дата<input name="date" type="date" required min="' + today() + '"></label><label>Время<input name="time" type="time"></label><label>Аудитория / место<input name="location" maxlength="80" placeholder="Ауд. 204"></label></div><label>Комментарий<input name="note" maxlength="180" placeholder="Что взять с собой (необязательно)"></label><button class="btn primary" type="submit">Добавить отработку</button></form>' : '';
+  return '<section class="makeups-page"><div class="makeups-hero panel"><div class="makeups-illustration" aria-hidden="true"><svg viewBox="0 0 180 140" fill="none"><rect x="27" y="22" width="112" height="96" rx="16" stroke="currentColor" stroke-width="5"/><path d="M27 51h112M56 12v22M110 12v22" stroke="currentColor" stroke-width="5" stroke-linecap="round"/><path d="m58 82 17 16 35-35" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/><circle cx="145" cy="99" r="20" fill="currentColor"/><path d="m136 99 6 6 12-13" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div><p class="eyebrow">УЧЕБНАЯ ГРУППА</p><h1>График отработок</h1><p class="muted">Даты, время и место дополнительных занятий для всей группы.</p></div></div>' + form + '<div class="makeups-heading"><div><p class="eyebrow">РАСПИСАНИЕ</p><h2>Ближайшие отработки</h2></div><span class="material-count">' + rows.length + ' ' + (rows.length === 1 ? 'запись' : 'записей') + '</span></div>' + cards + '</section>';
+}
+
+async function submitMakeup(form) {
+  if (state.role !== 'leader') return;
+  const values = Object.fromEntries(new FormData(form));
+  if (!values.subject || !values.date) return notify('Укажи предмет и дату отработки.', 'error');
+  setBusy(true);
+  try {
+    await addDoc(collection(db, 'groups', state.group.id, 'makeups'), {
+      subject: String(values.subject).trim(), date: values.date, time: values.time || '',
+      location: String(values.location || '').trim(), note: String(values.note || '').trim(),
+      createdAt: serverTimestamp(), createdBy: state.user.uid
+    });
+    await loadWorkspace();
+    renderWorkspace();
+    notify('Отработка добавлена в график.', 'success');
+  } catch (error) { notify(error.message || 'Не удалось добавить отработку.', 'error'); }
+  finally { setBusy(false); }
+}
+
+async function deleteMakeup(id) {
+  if (state.role !== 'leader' || !id) return;
+  setBusy(true);
+  try {
+    await deleteDoc(doc(db, 'groups', state.group.id, 'makeups', id));
+    await loadWorkspace();
+    renderWorkspace();
+    notify('Запись удалена.', 'success');
+  } catch (error) { notify(error.message || 'Не удалось удалить запись.', 'error'); }
+  finally { setBusy(false); }
+}
+
 function renderCurrentTab() {
   if (state.tab === 'appearance') return renderAppearance();
   if (state.tab === 'profile') return renderProfile();
@@ -670,6 +714,7 @@ function renderCurrentTab() {
   if (state.tab === 'moderation' && state.role === 'leader') return renderModeration();
   if (state.tab === 'attendance') return renderAttendance();
   if (state.tab === 'library') return renderLibrary();
+  if (state.tab === 'makeups') return renderMakeups();
   if (state.tab === 'manage') return renderManage();
   return renderOverview();
 }
@@ -2270,6 +2315,7 @@ function bindEvents() {
     if (button.dataset.action === 'delete-task') return deleteTask(button.dataset.id);
     if (button.dataset.action === 'download-material') return openGroupMaterial(button.dataset.id);
     if (button.dataset.action === 'delete-material') return deleteGroupMaterial(button.dataset.id);
+    if (button.dataset.action === 'delete-makeup') return deleteMakeup(button.dataset.id);
     if (button.dataset.action === 'export-attendance-report') {
       const month = root.querySelector('#attendance-report-month')?.value || '';
       return exportAttendanceReport(month);
@@ -2354,6 +2400,7 @@ function bindEvents() {
     if (form.id === 'cycle-form') return saveCycle(form);
     if (form.id === 'material-upload-form') return uploadGroupMaterial(form);
     if (form.id === 'material-link-form') return addGroupMaterialLink(form);
+    if (form.id === 'makeup-form') return submitMakeup(form);
   });
 
   root.addEventListener('change', async event => {
