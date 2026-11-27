@@ -1947,8 +1947,6 @@ async function saveUsername(form) {
       if (error.code === '23505') throw new Error('Этот логин уже занят другим аккаунтом. Выбери другой.');
       throw error;
     }
-    const { error: metadataError } = await supabase.auth.updateUser({ data: { username } });
-    if (metadataError) throw metadataError;
     state.profile = { ...state.profile, username };
     notify('Логин изменён. Теперь входи с @' + username + ' и прежним паролем.', 'success');
     renderWorkspace();
