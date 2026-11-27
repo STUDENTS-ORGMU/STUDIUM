@@ -1010,7 +1010,7 @@ function scheduleLessonCard(lesson, startIndex, span) {
     ? '<div class="schedule-homework-preview"><span>ДЗ</span><strong>' + esc(homework.title || 'Задание опубликовано') + '</strong>' +
       (homework.description ? '<small>' + esc(homework.description) + '</small>' : '') + '</div>'
     : '<button type="button" class="schedule-homework-action" data-action="open-lesson-homework" data-id="' + esc(lesson.id) + '">' +
-      (state.role === 'leader' ? '＋ Добавить ДЗ' : '＋ Предложить ДЗ') + '</button>';
+      (state.role === 'leader' ? 'Добавить ДЗ' : 'Предложить ДЗ') + '</button>';
   return '<article class="schedule-lesson ' + (lesson.lessonType === 'lecture' ? 'lecture-lesson' : 'seminar-lesson') + (span > 1 ? ' double-period' : '') + (selected ? ' selected-lesson' : '') +
     '" style="grid-row:span ' + span + '" data-schedule-lesson data-id="' + esc(lesson.id) +
     '" role="button" tabindex="0" aria-pressed="' + selected + '" aria-label="Показать задания: ' + esc(lesson.subject) + '">' +
