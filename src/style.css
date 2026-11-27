@@ -1185,3 +1185,12 @@
 .group-member-role.swamp-runner{background:#e7efe8;color:#385744;font-weight:700}
 
 .group-member-avatar-image{display:block;object-fit:cover;overflow:hidden}
+
+
+/* Student profile avatars stored in Supabase Storage */
+.profile-avatar-card { grid-column: 1 / -1; }
+.profile-avatar-editor { display:flex; align-items:center; gap:18px; margin:18px 0 10px; flex-wrap:wrap; }
+.profile-avatar-preview { width:88px; height:88px; flex:0 0 88px; border-radius:50%; object-fit:cover; border:1px solid var(--line, #dce5df); background:var(--surface-soft, #f2f1ed); }
+.profile-avatar-placeholder { display:grid; place-items:center; font-weight:700; color:var(--text, #26352d); font-size:22px; }
+.profile-avatar-pick { position:relative; overflow:hidden; cursor:pointer; }
+.group-member-avatar-image { object-fit:cover; display:block; }
