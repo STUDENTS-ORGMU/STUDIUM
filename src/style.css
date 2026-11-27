@@ -1278,10 +1278,10 @@
 :root[data-theme-mode="dark"] .schedule-inline-form input,
 :root[data-theme-mode="dark"] .schedule-inline-form select,
 :root[data-theme-mode="dark"] .student-attendance-date input{
-  background:#121b16;color:var(--ink);border-color:var(--line);
+  background:var(--paper);color:var(--ink);border-color:var(--line);
 }
 :root[data-theme-mode="dark"] .form input::placeholder,
-:root[data-theme-mode="dark"] .form textarea::placeholder{color:#78877d}
+:root[data-theme-mode="dark"] .form textarea::placeholder{color:var(--muted)}
 :root[data-theme-mode="dark"] .switch{background:var(--soft)}
 :root[data-theme-mode="dark"] .switch button{color:var(--muted)}
 :root[data-theme-mode="dark"] .switch button.active{background:var(--paper);color:var(--ink)}
