@@ -35,12 +35,6 @@ const mondayOf = value => {
 };
 const groupCollection = name => collection(db, 'groups', state.group.id, name);
 const groupDocument = (name, id) => doc(db, 'groups', state.group.id, name, id);
-const makeInviteCode = () => {
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  const bytes = new Uint8Array(12);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, byte => alphabet[byte % alphabet.length]).join('');
-};
 
 const state = {
   user: null,
@@ -291,7 +285,7 @@ async function boot(user = null) {
 }
 
 function renderOnboarding() {
-  frame('<main class="onboard"><header><a class="wordmark" href="#">STUDIUM</a><button class="btn ghost" data-action="logout">Выйти</button></header><section><p class="eyebrow">ДОБРО ПОЖАЛОВАТЬ</p><h1>Твоя учебная<br><em>группа начинается здесь.</em></h1><p class="muted lead">Создай новое пространство или присоединись к группе по коду приглашения.</p><div class="onboard-grid"><form id="create-group" class="panel form"><span class="tile-icon">＋</span><h2>Создать группу</h2><p class="muted">Ты станешь старостой группы.</p><label>Название<input name="name" required minlength="2" maxlength="80" placeholder="Например, ИС-21"></label><button class="btn primary">Создать группу</button></form><form id="join-group" class="panel form"><span class="tile-icon">↗</span><h2>Вступить в группу</h2><p class="muted">Введи код, который отправил староста.</p><label>Код приглашения<input name="code" required maxlength="12" placeholder="A4K8P2QW9T2"></label><button class="btn secondary">Присоединиться</button></form></div></section></main>');
+  frame('<main class="onboard"><header><a class="wordmark" href="#">STUDIUM</a><button class="btn ghost" data-action="logout">Выйти</button></header><section><p class="eyebrow">ДОБРО ПОЖАЛОВАТЬ</p><h1>Твоя учебная<br><em>группа начинается здесь.</em></h1><p class="muted lead">Создай новое пространство или найди существующую группу по названию.</p><div class="onboard-grid"><form id="create-group" class="panel form"><span class="tile-icon">＋</span><h2>Создать группу</h2><p class="muted">Ты станешь старостой группы. Название должно быть уникальным.</p><label>Название<input name="name" required minlength="2" maxlength="80" placeholder="Например, ИС-21"></label><button class="btn primary">Создать группу</button></form><form id="join-group" class="panel form"><span class="tile-icon">↗</span><h2>Вступить в группу</h2><p class="muted">Введи точное название учебной группы.</p><label>Название группы<input name="name" required minlength="2" maxlength="80" placeholder="Например, ИС-21"></label><button class="btn secondary">Найти и присоединиться</button></form></div></section></main>');
 }
 
 function stopLiveHomeworkUpdates() {
@@ -1824,7 +1818,6 @@ function renderManage() {
     )
   );
   const leader = state.role === 'leader';
-  const code = state.activeMembership?.inviteCode || '';
   const switcher = state.memberships.length > 1
     ? '<label class="field-label group-switch-field">Переключить группу<select id="group-switch">' +
       state.memberships.map(item => '<option value="' + esc(item.groupId) + '" ' +
@@ -1833,10 +1826,10 @@ function renderManage() {
     : '';
 
   const invite = leader
-    ? '<section class="group-invite-card"><div><p class="eyebrow">КОД ПРИГЛАШЕНИЯ</p>' +
-      '<h2>' + esc(code || 'Код не найден') + '</h2>' +
-      '<p class="muted">Отправь этот код студентам, чтобы они могли присоединиться к группе.</p></div>' +
-      (code ? '<button type="button" class="btn primary" data-action="copy-code">Скопировать код</button>' : '') +
+    ? '<section class="group-invite-card"><div><p class="eyebrow">НАЗВАНИЕ ДЛЯ ВСТУПЛЕНИЯ</p>' +
+      '<h2>' + esc(state.group.name || 'Учебная группа') + '</h2>' +
+      '<p class="muted">Отправь название студентам — они смогут найти группу и присоединиться к ней.</p></div>' +
+      '<button type="button" class="btn primary" data-action="copy-group-name">Скопировать название</button>' +
       '</section>'
     : '<p class="muted group-student-note">Ты состоишь в этой учебной группе. Список участников доступен всем членам группы.</p>';
 
@@ -2007,7 +2000,6 @@ async function createGroup(form) {
   if (!name) return notify('Укажи название группы.', 'error');
   setBusy(true);
   const groupId = crypto.randomUUID();
-  const inviteCode = makeInviteCode();
   try {
     const { error: groupError } = await supabase.from('study_groups').insert({
       id: groupId, name, created_by: state.user.id, data: { studyCycleStart: mondayOf(new Date()) }
@@ -2017,27 +2009,29 @@ async function createGroup(form) {
       group_id: groupId, user_id: state.user.id, role: 'leader', display_name: displayFullName(state.profile)
     });
     if (memberError) throw memberError;
-    const { error: inviteError } = await supabase.from('invite_codes').insert({
-      code: inviteCode, group_id: groupId, created_by: state.user.id, data: { groupName: name }
-    });
-    if (inviteError) throw inviteError;
     await loadMemberships();
     await selectGroup(groupId);
   } catch (error) {
     console.error('STUDIUM group creation failed', error);
-    notify(error.message || 'Не удалось создать группу.', 'error');
+    if (error.code === '23505' || error.message?.includes('study_groups_name_unique_idx')) {
+      notify('Группа с таким названием уже существует. Выбери другое название.', 'error');
+    } else notify(error.message || 'Не удалось создать группу.', 'error');
   } finally { setBusy(false); }
 }
 
 async function joinGroup(form) {
-  const code = String(new FormData(form).get('code') || '').trim().toUpperCase();
+  const name = String(new FormData(form).get('name') || '').trim().replace(/\\s+/g, ' ');
+  if (name.length < 2) return notify('Укажи название группы.', 'error');
   setBusy(true);
   try {
-    const { data: groupId, error } = await supabase.rpc('join_group_with_invite', {
-      p_code: code, p_display_name: displayFullName(state.profile)
+    const { data: groupId, error } = await supabase.rpc('join_group_by_name', {
+      p_group_name: name, p_display_name: displayFullName(state.profile)
     });
-    if (error) throw error;
-    if (!groupId) throw new Error('Код приглашения не найден.');
+    if (error) {
+      if (error.message?.includes('Group not found')) throw new Error('Группа с таким названием не найдена. Проверь написание.');
+      throw error;
+    }
+    if (!groupId) throw new Error('Группа с таким названием не найдена.');
     await loadMemberships();
     await selectGroup(groupId);
   } catch (error) {
@@ -2495,9 +2489,9 @@ function bindEvents() {
       return;
     }
     if (button.dataset.action === 'delete-lesson') return deleteLesson(button.dataset.id);
-    if (button.dataset.action === 'copy-code') {
-      try { await navigator.clipboard.writeText(state.activeMembership.inviteCode); notify('Код скопирован.', 'success'); }
-      catch { notify('Код приглашения: ' + state.activeMembership.inviteCode); }
+    if (button.dataset.action === 'copy-group-name') {
+      try { await navigator.clipboard.writeText(state.group.name); notify('Название группы скопировано.', 'success'); }
+      catch { notify('Название группы: ' + state.group.name); }
       return;
     }
     if (button.dataset.editSuggestion) { state.editingSuggestionId = button.dataset.editSuggestion; return render(); }
