@@ -1459,3 +1459,76 @@
 }
 :root[data-theme-mode="dark"] .appearance-mode-switch{background:var(--soft)}
 :root[data-theme-mode="dark"] .appearance-mode-switch button.active{background:#343b44;color:#f2f4f6}
+
+
+/* Final dark-mode fixes for group invite and profile hover surfaces */
+:root[data-theme-mode="dark"] .group-invite-card{
+  background:var(--paper);
+  color:var(--ink);
+  border:1px solid var(--line);
+}
+:root[data-theme-mode="dark"] .group-invite-card h2{color:var(--ink)}
+:root[data-theme-mode="dark"] .group-invite-card .muted{color:var(--muted)}
+:root[data-theme-mode="dark"] .side-user-profile,
+:root[data-theme-mode="dark"] .side-user-profile:visited{
+  background:transparent;
+  color:var(--ink);
+}
+:root[data-theme-mode="dark"] .side-user-profile:hover,
+:root[data-theme-mode="dark"] .side-user-profile:focus-visible{
+  background:var(--soft);
+  color:var(--ink);
+  outline-color:var(--theme-accent);
+}
+:root[data-theme-mode="dark"] .side-user-profile:hover .side-user-copy strong,
+:root[data-theme-mode="dark"] .side-user-profile:focus-visible .side-user-copy strong{
+  color:var(--ink);
+}
+:root[data-theme-mode="dark"] .side-user-profile:hover .side-user-copy small,
+:root[data-theme-mode="dark"] .side-user-profile:hover .side-user-copy em,
+:root[data-theme-mode="dark"] .side-user-profile:focus-visible .side-user-copy small,
+:root[data-theme-mode="dark"] .side-user-profile:focus-visible .side-user-copy em{
+  color:var(--muted);
+}
+
+/* Avatars must remain square and circular without stretching their source image */
+.group-member-avatar-image{
+  display:block;
+  width:38px;
+  height:38px;
+  min-width:38px;
+  min-height:38px;
+  max-width:38px;
+  max-height:38px;
+  flex:0 0 38px;
+  aspect-ratio:1 / 1;
+  border-radius:50%;
+  object-fit:cover;
+  object-position:center;
+}
+.side-user-profile .side-user-avatar-image,
+.side-user-avatar-image{
+  display:block;
+  width:36px;
+  height:36px;
+  min-width:36px;
+  min-height:36px;
+  max-width:36px;
+  max-height:36px;
+  flex:0 0 36px;
+  aspect-ratio:1 / 1;
+  border-radius:50%;
+  object-fit:cover;
+  object-position:center;
+  overflow:hidden;
+}
+.profile-avatar-preview{
+  width:88px;
+  height:88px;
+  min-width:88px;
+  min-height:88px;
+  aspect-ratio:1 / 1;
+  object-fit:cover;
+  object-position:center;
+  border-radius:50%;
+}
