@@ -708,3 +708,139 @@
   .nav-section>small{padding-bottom:2px}
   .side-user{padding-top:7px}
 }
+
+
+/* Apply the selected appearance theme consistently to attendance and reports */
+:root[data-theme] .attendance-report-toolbar,
+:root[data-theme] .attendance-register,
+:root[data-theme] .attendance-lesson-card,
+:root[data-theme] .attendance-person-row,
+:root[data-theme] .attendance-subpart,
+:root[data-theme] .attendance-part-tab{
+  color:var(--ink);
+  background:var(--paper);
+  border-color:var(--line);
+}
+:root[data-theme] .attendance-lesson-card:hover,
+:root[data-theme] .attendance-part-tab:hover{
+  background:var(--soft);
+  border-color:color-mix(in srgb,var(--theme-accent) 48%,var(--line));
+}
+:root[data-theme] .attendance-lesson-card.selected,
+:root[data-theme] .attendance-part-tab.active{
+  background:color-mix(in srgb,var(--theme-accent) 11%,var(--paper));
+  border:1.5px solid var(--theme-accent);
+  color:var(--ink);
+  box-shadow:0 3px 13px color-mix(in srgb,var(--theme-accent) 13%,transparent);
+}
+:root[data-theme] .attendance-lesson-card>span,
+:root[data-theme] .attendance-part-tab small,
+:root[data-theme] .attendance-subpart-heading span{
+  color:var(--muted);
+}
+:root[data-theme] .attendance-summary span,
+:root[data-theme] .attendance-register-summary span,
+:root[data-theme] .attendance-register-count,
+:root[data-theme] .roster-number,
+:root[data-theme] .roster-role{
+  color:var(--ink);
+  background:var(--soft);
+  border-color:var(--line);
+}
+:root[data-theme] .attendance-summary b,
+:root[data-theme] .attendance-register-summary b,
+:root[data-theme] .attendance-person-info>strong,
+:root[data-theme] .attendance-subpart-heading strong{
+  color:var(--ink);
+}
+:root[data-theme] .attendance-roster-row{border-color:var(--line)}
+:root[data-theme] .roster-official select,
+:root[data-theme] .attendance-report-controls input{
+  color:var(--ink);
+  background:var(--paper);
+  border-color:var(--line);
+}
+:root[data-theme] .attendance-bulk-present{
+  color:var(--paper);
+  background:var(--theme-accent);
+  border-color:var(--theme-accent);
+}
+:root[data-theme] .attendance-bulk-present:hover{filter:brightness(.92)}
+:root[data-theme] .attendance-bulk-excuse,
+:root[data-theme] .roster-excuse-btn{
+  color:var(--ink);
+  background:var(--soft);
+  border-color:var(--line);
+}
+:root[data-theme] .attendance-bulk-excuse:hover,
+:root[data-theme] .roster-excuse-btn:hover{background:color-mix(in srgb,var(--theme-accent) 12%,var(--paper))}
+:root[data-theme] .attendance-mark{
+  color:var(--ink);
+  background:var(--paper);
+  border-color:var(--line);
+}
+:root[data-theme] .attendance-mark:hover{background:var(--soft);border-color:var(--theme-accent)}
+:root[data-theme] .attendance-mark.mark-present.active,
+:root[data-theme] .attendance-mark.mark-absent.active,
+:root[data-theme] .attendance-mark.mark-excused.active{
+  color:var(--paper);
+  background:var(--theme-accent);
+  border-color:var(--theme-accent);
+  box-shadow:0 0 0 2px color-mix(in srgb,var(--theme-accent) 14%,transparent);
+}
+:root[data-theme] .attendance-mark.suggested{
+  color:var(--ink);
+  background:var(--soft);
+  border-color:color-mix(in srgb,var(--theme-accent) 55%,var(--line));
+}
+:root[data-theme] .attendance-mark.mark-present.suggested,
+:root[data-theme] .attendance-mark.mark-absent.suggested,
+:root[data-theme] .attendance-mark.mark-excused.suggested{
+  border-color:var(--theme-accent);
+}
+:root[data-theme] .attendance-response.will-attend,
+:root[data-theme] .attendance-response.will-miss,
+:root[data-theme] .attendance-response.no-response,
+:root[data-theme] .attendance-person-response.positive,
+:root[data-theme] .attendance-person-response.negative{
+  color:var(--ink);
+  background:var(--soft);
+}
+:root[data-theme] .attendance-response{border:1px solid var(--line)}
+:root[data-theme] .attendance-date-leader + .attendance-lesson-grid .attendance-lesson-card.selected{
+  border-color:var(--theme-accent);
+}
+:root[data-theme] .student-attendance-page{
+  color:var(--ink);
+  background:var(--paper);
+  border-color:var(--line);
+}
+:root[data-theme] .student-attendance-lesson{
+  background:var(--theme-lecture);
+  border-color:var(--line);
+}
+:root[data-theme] .student-attendance-lesson-title small,
+:root[data-theme] .student-attendance-lesson-title h2,
+:root[data-theme] .student-attendance-lesson-title p{
+  color:var(--ink);
+}
+:root[data-theme] .attendance-choice{
+  color:var(--ink);
+  background:var(--paper);
+  border-color:var(--line);
+}
+:root[data-theme] .attendance-choice.active.attend,
+:root[data-theme] .attendance-choice.active.miss{
+  color:var(--paper);
+  background:var(--theme-accent);
+  border-color:var(--theme-accent);
+}
+:root[data-theme] .attendance-choice:hover{border-color:var(--theme-accent);background:var(--soft)}
+:root[data-theme] .attendance-subpart.is-split{
+  background:var(--soft);
+  border-color:var(--line);
+}
+:root[data-theme] .attendance-person-response,
+:root[data-theme] .roster-late-note{color:var(--muted)}
+:root[data-theme] .attendance-report-toolbar .eyebrow,
+:root[data-theme] .attendance-register .eyebrow{color:var(--muted)}
