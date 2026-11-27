@@ -1001,3 +1001,10 @@
 .suggestion-edit-form input:focus{outline:2px solid color-mix(in srgb,var(--theme-accent) 20%,transparent);border-color:var(--theme-accent)}
 .suggestion-edit-form .muted,.suggestion-edit-form .actions{grid-column:1/-1}
 @media(max-width:680px){.suggestion-edit-form{grid-template-columns:1fr}}
+
+
+.suggestion-edit-files{display:flex;flex-wrap:wrap;gap:8px;grid-column:1/-1}
+.suggestion-edit-files .task-file-chip{display:flex;align-items:center;gap:9px;max-width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:10px;background:var(--paper)}
+.suggestion-edit-files .task-file-name{overflow-wrap:anywhere}
+.suggestion-file-picker{grid-column:1/-1;display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px dashed var(--line);border-radius:10px;background:var(--paper);cursor:pointer}
+.suggestion-file-picker input{border:0;padding:0;background:transparent}
