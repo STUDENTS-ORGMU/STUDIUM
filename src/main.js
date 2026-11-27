@@ -682,7 +682,6 @@ const themeOptions = [
   { id: 'sand', name: 'Песчаник', note: 'Светлый природный оттенок', colors: ['#FBF8F2','#E9DDC9','#302A22','#B9A88E'] },
   { id: 'forest', name: 'Тёмный лес', note: 'Глубокий зелёно-серый акцент', colors: ['#F5F7F5','#DCE5DE','#25342B','#91A497'] },
   { id: 'lavender', name: 'Дымчатая лаванда', note: 'Мягкий холодный оттенок', colors: ['#F8F7FA','#E5E0EA','#302B36','#A69BAD'] },
-  { id: 'dark', name: 'Тёмная тема', note: 'Графитовый интерфейс для вечера', colors: ['#17191C','#24282D','#F2F3F4','#66717C'] }
 ];
 
 function applyTheme(themeId) {
