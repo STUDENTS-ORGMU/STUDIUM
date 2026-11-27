@@ -1848,7 +1848,7 @@ function renderManage() {
     const initials = name.trim().split(/\s+/).slice(0,2).map(part => part[0] || '').join('').toUpperCase();
     const memberLabel = special ? 'Бегущий по болоту' : (isLeader ? 'Староста' : 'Студент');
     return '<article class="group-member-row' + (special ? ' group-member-row-special' : '') + '">' +
-      '<span class="group-member-avatar">' + esc(initials || 'У') + '</span>' +
+      (special ? '<img class="group-member-avatar group-member-avatar-image" src="/zhabov-avatar.webp" alt="Аватар Жабова Жаба Жабовича">' : '<span class="group-member-avatar">' + esc(initials || 'У') + '</span>') +
       '<div class="group-member-name"><strong>' + esc(name) + (isCurrent ? ' <span class="group-you-label">Это вы</span>' : '') + '</strong>' +
       '<small>' + memberLabel + '</small></div>' +
       (isLeader ? '<span class="group-member-role">Староста</span>' : '<span class="group-member-role student' + (special ? ' swamp-runner' : '') + '">' + memberLabel + '</span>') +
