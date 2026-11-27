@@ -442,7 +442,8 @@ function sidebarIcon(name) {
     moderation: '<path d="M9 12l2 2 4-4"/><path d="M12 3 4 6v5c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6z"/>',
     attendance: '<path d="M4 19V5M4 19h16"/><path d="M8 15v-4M12 15V7M16 15V9"/>',
     library: '<path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v18H6.5A2.5 2.5 0 0 1 4 17.5z"/><path d="M4 6h16M8 10h8M8 14h8"/>',
-    manage: '<circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1 1.4 1.1-1.4 2.4-1.7-.7a8 8 0 0 1-1.7 1l-.3 1.8h-2.8l-.3-1.8a8 8 0 0 1-1.7-1l-1.7.7-1.4-2.4 1.4-1.1a7 7 0 0 1 0-2l-1.4-1.1 1.4-2.4 1.7.7a8 8 0 0 1 1.7-1l.3-1.8h2.8l.3 1.8a8 8 0 0 1 1.7 1l1.7-.7 1.4 2.4-1.4 1.1a7 7 0 0 1 0 2z"/>'
+    manage: '<circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1 1.4 1.1-1.4 2.4-1.7-.7a8 8 0 0 1-1.7 1l-.3 1.8h-2.8l-.3-1.8a8 8 0 0 1-1.7-1l-1.7.7-1.4-2.4 1.4-1.1a7 7 0 0 1 0-2l-1.4-1.1 1.4-2.4 1.7.7a8 8 0 0 1 1.7-1l.3-1.8h2.8l.3 1.8a8 8 0 0 1 1.7 1l1.7-.7 1.4 2.4-1.4 1.1a7 7 0 0 1 0 2z"/>',
+    appearance: '<path d="M12 3a9 9 0 1 0 0 18h1.2a2 2 0 0 0 1.5-3.3 1.5 1.5 0 0 1 1.1-2.5H18a3 3 0 0 0 3-3c0-5.1-4-9.2-9-9.2Z"/><circle cx="7.5" cy="10" r="1"/><circle cx="11" cy="7" r="1"/><circle cx="16" cy="8.5" r="1"/>'
   };
   return '<svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (paths[name] || '') + '</svg>';
 }
@@ -465,7 +466,7 @@ function renderWorkspace() {
     navButton('library', 'library', 'Материалы'),
     navButton('manage', 'manage', 'Группа')
   ].join('');
-  const settingsTab = navButton('appearance', 'manage', 'Оформление');
+  const settingsTab = navButton('appearance', 'appearance', 'Оформление');
 
   frame('<div class="layout"><aside class="sidebar"><a class="wordmark" href="#">STUDIUM</a><div class="group-box"><div class="group-box-heading"><small>ТВОЯ ГРУППА</small></div><strong>' + esc(state.group.name) + '</strong><div class="group-box-meta"><span>' + (leader ? 'Староста' : 'Студент') + '</span><span>' + state.groupMembers.length + ' участн.</span></div></div><nav><div class="nav-section"><small>ОСНОВНОЕ</small>' + mainTabs + '</div><div class="nav-section"><small>УПРАВЛЕНИЕ ГРУППОЙ</small>' + groupTabs + '</div><div class="nav-section"><small>НАСТРОЙКИ</small>' + settingsTab + '</div></nav><div class="side-user"><button type="button" class="side-user-profile" data-tab="profile"><span class="avatar">' + esc(name.slice(0,1).toUpperCase()) + '</span><span class="side-user-copy"><strong>' + esc(name) + '</strong><small>' + esc(state.profile?.username ? '@' + state.profile.username : '') + '</small><em>Мой профиль →</em></span></button><button class="btn ghost" data-action="logout">Выйти</button></div></aside><main class="main"><header class="mobile-head"><button class="btn ghost" data-action="menu">☰</button><a class="wordmark" href="#">STUDIUM</a><span class="role">' + (leader ? 'Староста' : 'Студент') + '</span></header><div class="content">' + renderCurrentTab() + '</div></main></div>');
 }
