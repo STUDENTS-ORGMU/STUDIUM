@@ -1813,9 +1813,10 @@ async function deleteTask(taskId) {
 
 function renderManage() {
   const allMembers = state.groupMembers.slice();
-  const specialMemberName = 'zhабов жаб жабович';
-  const isSpecialMember = member => String(member.displayName || member.fullName || member.username || '')
-    .trim().replace(/\s+/g, ' ').toLocaleLowerCase('ru') === specialMemberName;
+  // Special status is bound to this account's immutable Supabase auth user ID,
+  // not to a display name or username that the user can change.
+  const specialMemberUserId = '5394ec65-4ea6-4e32-b08b-0f4471d0b8fd';
+  const isSpecialMember = member => member.id === specialMemberUserId;
   const specialMember = allMembers.find(isSpecialMember);
   const members = allMembers.filter(member => !isSpecialMember(member)).sort((a,b) =>
     String(a.displayName || a.username || '').localeCompare(
