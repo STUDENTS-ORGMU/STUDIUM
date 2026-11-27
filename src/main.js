@@ -1667,11 +1667,7 @@ async function excuseMissedStudents(lessonId, onlyStudentId = null, partKey = nu
     notify('Нет студентов с ответом «Не буду» на выбранную часть.');
     return;
   }
-  const title = onlyStudentId
-    ? 'Поставить этому студенту «Уважительная причина»?'
-    : 'Поставить «Уважительная причина» всем ' + missing.length + ' студентам, ответившим «Не буду»' + (partKey ? ' на выбранную часть' : '') + '?';
-  if (!window.confirm(title)) return;
-
+  // Apply the official excuse mark immediately; the leader can change it later.
   setBusy(true);
   try {
     for (let offset = 0; offset < missing.length; offset += 450) {
