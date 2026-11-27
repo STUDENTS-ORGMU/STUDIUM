@@ -465,7 +465,7 @@ function renderWorkspace() {
   const name = displayFullName(state.profile);
   const mainTabs = [
     navButton('overview', 'overview', 'Обзор'),
-    navButton('deadlines', 'deadlines', 'Дедлайны'),
+    navButton('deadlines', 'deadlines', 'Календарь дедлайнов'),
     navButton('schedule', 'schedule', 'Расписание и ДЗ')
   ].join('');
   const groupTabs = [
@@ -864,7 +864,7 @@ function renderDeadlines() {
       taskCards(selectedTasks)
     : empty('На этот день дедлайнов нет', 'Выбери другую дату в календаре или добавь ДЗ к паре в расписании.');
 
-  return heading('УЧЕБНЫЙ ПРОЦЕСС', 'Дедлайны', 'Календарь домашних заданий и твой прогресс по каждому дню.') +
+  return heading('УЧЕБНЫЙ ПРОЦЕСС', 'Календарь дедлайнов', 'Домашние задания и твой прогресс по каждому дню.') +
     '<section class="deadline-calendar-panel">' +
       '<div class="deadline-calendar-header">' +
         '<div><p class="eyebrow">КАЛЕНДАРЬ ДЕДЛАЙНОВ</p><h2>' + esc(monthLabel) + '</h2></div>' +
@@ -1542,7 +1542,7 @@ function renderAttendance() {
     : null;
   return heading('ПОСЕЩАЕМОСТЬ', 'Журнал старосты', 'Выбери пару и отмечай посещаемость по списку группы.') +
     renderAttendanceReportToolbar() +
-    '<div class="date-picker attendance-date-leader"><label>Дата<input type="date" id="attendance-date" value="' + date + '"></label><span>' + esc(dateLabel) + ' · ' + (week === 1 ? 'Первая' : 'Вторая') + ' учебная неделя</span></div>' +
+    '<section class="attendance-calendar-panel"><div class="attendance-calendar-heading"><div><p class="eyebrow">КАЛЕНДАРЬ ПОСЕЩАЕМОСТИ</p><strong>Выбери дату занятий</strong></div><label class="attendance-calendar-date">Дата<input type="date" id="attendance-date" value="' + date + '"></label></div><span class="attendance-calendar-caption">' + esc(dateLabel) + ' · ' + (week === 1 ? 'Первая' : 'Вторая') + ' учебная неделя</span></section>' +
     (lessons.length ? '<div class="attendance-lesson-grid">' + cards + '</div>' : empty('На эту дату пар нет', 'Выбери другую дату или проверь расписание группы.')) +
     (selected ? renderAttendanceRoster(selected, selectedPartKey) : (lessons.length ? '<p class="muted small attendance-pick-hint">Нажми на пару выше — откроется список группы по алфавиту.</p>' : ''));
 }
