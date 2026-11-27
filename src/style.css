@@ -1129,3 +1129,45 @@
   animation:suggestion-upload-spin .75s linear infinite;
 }
 @keyframes suggestion-upload-spin{to{transform:rotate(360deg)}}
+
+
+.attendance-calendar-panel{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  margin:16px 0 18px;
+  padding:15px 17px;
+  border:1px solid var(--line);
+  border-radius:14px;
+  background:var(--soft);
+}
+.attendance-calendar-heading{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+}
+.attendance-calendar-heading .eyebrow{margin:0 0 4px}
+.attendance-calendar-heading strong{font-size:14px}
+.attendance-calendar-date{
+  display:flex;
+  align-items:center;
+  gap:9px;
+  color:var(--muted);
+  font-size:12px;
+  font-weight:650;
+}
+.attendance-calendar-date input{
+  min-width:145px;
+  padding:8px 10px;
+  border:1px solid var(--line);
+  border-radius:9px;
+  background:var(--paper);
+  color:var(--ink);
+  font:inherit;
+}
+.attendance-calendar-caption{color:var(--muted);font-size:12px}
+@media(max-width:560px){
+  .attendance-calendar-heading{align-items:flex-start;flex-direction:column}
+  .attendance-calendar-date{width:100%;justify-content:space-between}
+}
