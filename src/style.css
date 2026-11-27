@@ -844,3 +844,111 @@
 :root[data-theme] .roster-late-note{color:var(--muted)}
 :root[data-theme] .attendance-report-toolbar .eyebrow,
 :root[data-theme] .attendance-register .eyebrow{color:var(--muted)}
+
+
+/* Full dark appearance theme */
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --ink:#F0F2F4;
+  --muted:#A0A8B1;
+  --line:#3A4149;
+  --paper:#202428;
+  --bg:#15181B;
+  --soft:#2B3036;
+  --theme-lecture:#30363D;
+  --theme-seminar:#202428;
+  --theme-accent:#D7DDE3;
+}
+:root[data-theme="dark"] body,
+:root[data-theme="dark"] #app,
+:root[data-theme="dark"] .workspace,
+:root[data-theme="dark"] main{background:var(--bg);color:var(--ink)}
+:root[data-theme="dark"] .sidebar,
+:root[data-theme="dark"] .group-box,
+:root[data-theme="dark"] .panel,
+:root[data-theme="dark"] .card,
+:root[data-theme="dark"] .schedule-day,
+:root[data-theme="dark"] .schedule-week-card,
+:root[data-theme="dark"] .attendance-report-toolbar,
+:root[data-theme="dark"] .attendance-register,
+:root[data-theme="dark"] .attendance-person-row,
+:root[data-theme="dark"] .attendance-lesson-card,
+:root[data-theme="dark"] .student-attendance-page{
+  color:var(--ink);background:var(--paper);border-color:var(--line);
+}
+:root[data-theme="dark"] h1,:root[data-theme="dark"] h2,:root[data-theme="dark"] h3,
+:root[data-theme="dark"] h4,:root[data-theme="dark"] p,
+:root[data-theme="dark"] label,:root[data-theme="dark"] strong,
+:root[data-theme="dark"] .group-box strong,:root[data-theme="dark"] .side-user-copy strong,
+:root[data-theme="dark"] .attendance-person-info>strong{
+  color:var(--ink);
+}
+:root[data-theme="dark"] small,:root[data-theme="dark"] .muted,
+:root[data-theme="dark"] .eyebrow,:root[data-theme="dark"] .caption,
+:root[data-theme="dark"] .side-user-copy small,:root[data-theme="dark"] .side-user-copy em{
+  color:var(--muted);
+}
+:root[data-theme="dark"] input,:root[data-theme="dark"] select,
+:root[data-theme="dark"] textarea,:root[data-theme="dark"] .field,
+:root[data-theme="dark"] .attendance-report-controls input{
+  color:var(--ink);background:#191D21;border-color:var(--line);color-scheme:dark;
+}
+:root[data-theme="dark"] input::placeholder,:root[data-theme="dark"] textarea::placeholder{color:#89929B}
+:root[data-theme="dark"] .btn.secondary,:root[data-theme="dark"] .btn.ghost,
+:root[data-theme="dark"] button:not(.btn.primary):not(.attendance-mark.active):not(.attendance-choice.active),
+:root[data-theme="dark"] .nav-section button{
+  color:var(--ink);border-color:var(--line);
+}
+:root[data-theme="dark"] .btn.primary,
+:root[data-theme="dark"] .attendance-bulk-present,
+:root[data-theme="dark"] .attendance-mark.active,
+:root[data-theme="dark"] .attendance-choice.active{
+  background:#E3E7EB;border-color:#E3E7EB;color:#171A1D;
+}
+:root[data-theme="dark"] .nav-section button.active,
+:root[data-theme="dark"] .nav-section button:hover{background:#30363D;color:#fff}
+:root[data-theme="dark"] .schedule-lesson.seminar-lesson{
+  background:#202428;border-color:#3A4149;border-left-color:#68727D;color:var(--ink)
+}
+:root[data-theme="dark"] .schedule-lesson.lecture-lesson{
+  background:#30363D;border-color:#4A535D;border-left-color:#E3E7EB;color:var(--ink)
+}
+:root[data-theme="dark"] .schedule-lesson.lecture-lesson .schedule-lesson-type-label{
+  background:#E3E7EB;color:#171A1D;border-color:#E3E7EB
+}
+:root[data-theme="dark"] .schedule-lesson.seminar-lesson .schedule-lesson-type-label{
+  background:#30363D;color:#E5E9ED;border-color:#4A535D
+}
+:root[data-theme="dark"] .schedule-empty-slot{background:#191D21;border-color:#48515A;color:#A0A8B1}
+:root[data-theme="dark"] .today-badge{background:#E3E7EB;color:#171A1D}
+:root[data-theme="dark"] .tomorrow-badge{background:#30363D;color:#F0F2F4;border-color:#4A535D}
+:root[data-theme="dark"] .attendance-lesson-card.selected,
+:root[data-theme="dark"] .attendance-part-tab.active{
+  background:#30363D;border-color:#D7DDE3;color:#F0F2F4
+}
+:root[data-theme="dark"] .attendance-mark,
+:root[data-theme="dark"] .attendance-choice{
+  color:var(--ink);background:#191D21;border-color:var(--line)
+}
+:root[data-theme="dark"] .attendance-mark.active,
+:root[data-theme="dark"] .attendance-choice.active.attend,
+:root[data-theme="dark"] .attendance-choice.active.miss{
+  background:#E3E7EB;color:#171A1D;border-color:#E3E7EB
+}
+:root[data-theme="dark"] .attendance-subpart,
+:root[data-theme="dark"] .attendance-subpart.is-split,
+:root[data-theme="dark"] .attendance-response,
+:root[data-theme="dark"] .attendance-person-response{
+  background:#292E34;color:var(--ink);border-color:var(--line)
+}
+:root[data-theme="dark"] table,:root[data-theme="dark"] th,:root[data-theme="dark"] td{border-color:var(--line);color:var(--ink)}
+:root[data-theme="dark"] hr,:root[data-theme="dark"] .divider{border-color:var(--line)}
+:root[data-theme="dark"] .theme-option{background:var(--paper);color:var(--ink);border-color:var(--line)}
+:root[data-theme="dark"] .theme-option.active{border-color:#E3E7EB}
+:root[data-theme="dark"] .theme-check{background:#E3E7EB;color:#171A1D}
+:root[data-theme="dark"] .theme-option:not(.active) .theme-check{background:#30363D;color:transparent}
+:root[data-theme="dark"] .toast,:root[data-theme="dark"] .modal,
+:root[data-theme="dark"] .dialog,:root[data-theme="dark"] .popover-content{
+  background:#24292E;color:var(--ink);border-color:var(--line)
+}
+:root[data-theme="dark"] .avatar{background:#30363D;color:#F0F2F4}
