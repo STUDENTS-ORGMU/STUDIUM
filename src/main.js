@@ -450,7 +450,11 @@ async function loadWorkspace() {
     const { data: avatarProfiles, error: avatarProfilesError } = await supabase.from('profiles').select('id, avatar_path').in('id', memberIds);
     if (avatarProfilesError) throw avatarProfilesError;
     const avatarByUser = new Map((avatarProfiles || []).map(profile => [profile.id, profile.avatar_path]));
-    state.groupMembers = memberRows.map(member => ({ ...member, avatarPath: member.avatarPath || avatarByUser.get(member.id) || null }));
+    state.groupMembers = memberRows.map(member => {
+      const groupAvatarPath = member.avatarPath || null;
+      const profileAvatarPath = avatarByUser.get(member.id) || null;
+      return { ...member, groupAvatarPath, profileAvatarPath, avatarPath: groupAvatarPath || profileAvatarPath };
+    });
   } else state.groupMembers = memberRows;
   state.attendanceRecords = attendanceRecords.docs.map(item => ({ id: item.id, ...item.data() }));
   state.materials = materials.docs.map(item => ({ id: item.id, ...item.data() }));
@@ -1907,7 +1911,8 @@ function renderManage() {
       '<div class="group-member-name"><strong>' + esc(name) + (isCurrent ? ' <span class="group-you-label">Это вы</span>' : '') + '</strong>' +
       '<small>' + memberLabel + '</small></div>' +
       (isLeader ? '<span class="group-member-role">Староста</span>' : '<span class="group-member-role student' + (special ? ' swamp-runner' : '') + '">' + memberLabel + '</span>') +
-      (leader && !isLeader && !isCurrent ? '<label class="btn ghost group-member-avatar-upload">' + (member.avatarPath ? 'Изменить фото' : 'Добавить фото') + '<input type="file" accept="image/png,image/jpeg,image/webp,image/avif" data-avatar-for="' + esc(member.id) + '" hidden></label>' : '') +
+      (leader && !isLeader && !isCurrent ? '<label class="btn ghost group-member-avatar-upload">' + (member.groupAvatarPath ? 'Изменить фото' : 'Добавить фото') + '<input type="file" accept="image/png,image/jpeg,image/webp,image/avif" data-avatar-for="' + esc(member.id) + '" hidden></label>' +
+        (member.groupAvatarPath ? '<button type="button" class="btn ghost group-member-avatar-remove" data-action="remove-member-avatar" data-user-id="' + esc(member.id) + '" data-user-name="' + esc(name) + '">Убрать фото</button>' : '') : '') +
       (leader && !isLeader && !isCurrent ? '<button type="button" class="btn ghost group-member-remove" data-action="remove-group-member" data-user-id="' + esc(member.id) + '" data-user-name="' + esc(name) + '" aria-label="Удалить ' + esc(name) + ' из группы">Удалить</button>' : '') +
       '</article>';
   };
@@ -2037,13 +2042,54 @@ async function uploadMemberAvatar(file, userId) {
     const { error: updateError } = await supabase.from('group_members')
       .update({ avatar_path: uploadedPath }).eq('group_id', state.group.id).eq('user_id', userId);
     if (updateError) throw updateError;
-    state.groupMembers = state.groupMembers.map(member => member.id === userId ? { ...member, avatarPath: uploadedPath } : member);
+    const oldGroupAvatarPath = state.groupMembers.find(member => member.id === userId)?.groupAvatarPath;
+    state.groupMembers = state.groupMembers.map(member => member.id === userId
+      ? { ...member, groupAvatarPath: uploadedPath, avatarPath: uploadedPath }
+      : member);
+    if (oldGroupAvatarPath) {
+      const { error: cleanupError } = await supabase.storage.from('avatars').remove([oldGroupAvatarPath]);
+      if (cleanupError) console.warn('Не удалось удалить предыдущий аватар участника:', cleanupError);
+    }
     notify('Аватар студента сохранён в Supabase.', 'success');
     renderWorkspace();
   } catch (error) {
     if (uploadedPath) await supabase.storage.from('avatars').remove([uploadedPath]);
     notify(error.message || 'Не удалось загрузить аватар студента.', 'error');
   } finally { setBusy(false); }
+}
+
+async function removeMemberAvatar(userId, userName = 'участника') {
+  if (state.role !== 'leader' || !state.group?.id || !userId || userId === state.user?.id) return;
+  const member = state.groupMembers.find(item => item.id === userId);
+  const avatarPath = member?.groupAvatarPath;
+  if (!avatarPath) return notify('У этого участника нет отдельной фотографии группы.');
+  if (!confirm('Убрать фотографию группы у ' + userName + '?')) return;
+
+  setBusy(true);
+  try {
+    const { error: updateError } = await supabase.from('group_members')
+      .update({ avatar_path: null })
+      .eq('group_id', state.group.id)
+      .eq('user_id', userId);
+    if (updateError) throw updateError;
+
+    state.groupMembers = state.groupMembers.map(item => item.id === userId
+      ? { ...item, groupAvatarPath: null, avatarPath: item.profileAvatarPath || null }
+      : item);
+
+    const { error: removeError } = await supabase.storage.from('avatars').remove([avatarPath]);
+    if (removeError) {
+      console.warn('Аватар отвязан, но файл не удалось удалить:', removeError);
+      notify('Фото убрано из группы, но файл не удалось очистить из хранилища.', 'error');
+    } else {
+      notify('Фотография участника удалена.', 'success');
+    }
+    renderWorkspace();
+  } catch (error) {
+    notify(error.message || 'Не удалось убрать фотографию участника.', 'error');
+  } finally {
+    setBusy(false);
+  }
 }
 
 async function saveProfile(form) {
@@ -2554,6 +2600,7 @@ function bindEvents() {
     if (button.dataset.action === 'delete-material') return deleteGroupMaterial(button.dataset.id);
     if (button.dataset.action === 'delete-makeup') return deleteMakeup(button.dataset.id);
     if (button.dataset.action === 'remove-group-member') return removeGroupMember(button.dataset.userId, button.dataset.userName);
+    if (button.dataset.action === 'remove-member-avatar') return removeMemberAvatar(button.dataset.userId, button.dataset.userName);
     if (button.dataset.action === 'export-attendance-report') {
       const month = root.querySelector('#attendance-report-month')?.value || '';
       return exportAttendanceReport(month);
