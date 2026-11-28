@@ -1998,8 +1998,8 @@ function profilePermissionMessage(error) {
 
 async function uploadProfileAvatar(file) {
   if (!state.user?.id) return;
-  if (!/^image\/(png|jpeg|webp|avif)$/.test(file.type) || file.size > 5 * 1024 * 1024) {
-    return notify('Выбери PNG, JPG, WebP или AVIF размером до 5 МБ.', 'error');
+  if (!/^image\/(png|jpeg|webp|avif)$/.test(file.type) || file.size > 300 * 1024) {
+    return notify('Выбери PNG, JPG, WebP или AVIF размером до 300 КБ.', 'error');
   }
   setBusy(true);
   try {
@@ -2027,8 +2027,8 @@ async function uploadProfileAvatar(file) {
 
 async function uploadMemberAvatar(file, userId) {
   if (state.role !== 'leader' || !state.group?.id || !userId || userId === state.user?.id) return;
-  if (!/^image\/(png|jpeg|webp|avif)$/.test(file.type) || file.size > 5 * 1024 * 1024) {
-    return notify('Выбери PNG, JPG, WebP или AVIF размером до 5 МБ.', 'error');
+  if (!/^image\/(png|jpeg|webp|avif)$/.test(file.type) || file.size > 300 * 1024) {
+    return notify('Выбери PNG, JPG, WebP или AVIF размером до 300 КБ.', 'error');
   }
   setBusy(true);
   let uploadedPath = null;
